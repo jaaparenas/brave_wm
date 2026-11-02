@@ -3,15 +3,48 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from brave_workspace_manager import i18n
 from brave_workspace_manager.models import Profile, WindowInfo
+
+_APPLICATION = None
+
+
+@pytest.fixture(scope="session")
+def app():
+    """One QApplication for the whole run, alive until every widget is gone.
+
+    A QApplication per test module is destroyed at interpreter exit before the
+    widgets the tests created, and Qt then crashes while freeing them.
+    """
+    global _APPLICATION
+    from PySide6.QtWidgets import QApplication
+
+    _APPLICATION = QApplication.instance() or QApplication([])
+    return _APPLICATION
+
+
+@pytest.fixture(autouse=True)
+def delete_widgets():
+    """Deletes the windows a test leaves behind, while the QApplication lives."""
+    yield
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QApplication
+
+    if QApplication.instance() is None:
+        return
+    for widget in QApplication.topLevelWidgets():
+        widget.close()
+        widget.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 @pytest.fixture(autouse=True)

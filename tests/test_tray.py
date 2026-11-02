@@ -13,13 +13,6 @@ from brave_workspace_manager.models import Profile
 from brave_workspace_manager.ui.tray import TrayIcon, profile_entry
 
 
-@pytest.fixture(scope="module")
-def app():
-    from PySide6.QtWidgets import QApplication
-
-    return QApplication.instance() or QApplication([])
-
-
 @pytest.fixture
 def profiles() -> list[Profile]:
     return [

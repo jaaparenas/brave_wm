@@ -21,13 +21,6 @@ from brave_workspace_manager.ui.profile_gallery import (
 )
 
 
-@pytest.fixture(scope="module")
-def app():
-    from PySide6.QtWidgets import QApplication
-
-    return QApplication.instance() or QApplication([])
-
-
 @pytest.fixture
 def profiles() -> list[Profile]:
     return [

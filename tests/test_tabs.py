@@ -8,17 +8,9 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-import pytest
 
 from brave_workspace_manager.models import Profile, WindowInfo
 from brave_workspace_manager.tabs import FrameTabs, TabReader, emparejar, normalizar, solape
-
-
-@pytest.fixture(scope="module")
-def app():
-    from PySide6.QtWidgets import QApplication
-
-    return QApplication.instance() or QApplication([])
 
 
 def _ventana(window_id: int, title: str, **extra) -> WindowInfo:
