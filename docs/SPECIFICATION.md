@@ -1,8 +1,8 @@
 # Functional and technical specification (SRS)
 
 > The original requirements document the application was built from. It was
-> written in Spanish (`Brave_Workspace_Manager_Specification.docx`); this is
-> an English translation that keeps its content unchanged. Section 15 shows
+> written in Spanish; this is an English translation that keeps its content
+> unchanged. Section 15 shows
 > how each requirement maps to the current implementation.
 
 | | |
