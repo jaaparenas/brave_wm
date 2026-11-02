@@ -250,6 +250,12 @@ class MainWindow(QMainWindow):
             shortcut = QShortcut(QKeySequence(sequence), self)
             shortcut.activated.connect(lambda a=action: self._on_shortcut(a))
 
+    def start(self) -> None:
+        """Arranca las capturas globales de teclado, que necesitan el grabber."""
+        self._install_local_shortcuts()
+        if self.database.get_setting("hotkeys_enabled", "1") == "1":
+            self._apply_shortcuts()
+
     # ------------------------------------------------------------- renderizado
 
     def _rebuild_profiles(self) -> None:

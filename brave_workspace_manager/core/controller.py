@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -162,9 +163,13 @@ class AppController(QObject):
 
     def _brave_windows(self, process_list: list[processes.BrowserProcess]) -> list[WindowInfo]:
         brave_pids = {p.pid for p in process_list}
+        own_pid = os.getpid()
         windows = []
         for window in self.backend.list_windows():
-            if window.pid in brave_pids or "brave" in window.wm_class.lower():
+            if window.pid == own_pid:
+                continue
+            tokens = window.wm_class.lower().replace("\0", " ").split()
+            if window.pid in brave_pids or "brave-browser" in tokens:
                 windows.append(window)
         return windows
 

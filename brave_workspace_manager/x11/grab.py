@@ -64,6 +64,7 @@ class ShortcutGrabber:
         self._stop.clear()
         self._ready.clear()
         self._failed = {}
+        self._bindings.clear()
         self._thread = threading.Thread(
             target=self._run, args=(dict(bindings),), name="shortcut-grabber", daemon=True
         )
@@ -80,10 +81,17 @@ class ShortcutGrabber:
 
     # ------------------------------------------------------------- interno
 
-    def _error_handler(self, err, extra=None) -> None:  # pragma: no cover - ruta de error X11
-        name = type(err).__name__
-        if name == "BadAccess":
-            self._failed["_last"] = "El servidor X ya tiene esa combinacion reservada"
+    def _error_handler(self, action: str):
+        """Devuelve un manejador que anota el atajo que X11 no concedio."""
+
+        def handler(error, request=None) -> None:  # pragma: no cover - ruta de error X11
+            name = type(error).__name__
+            if name == "BadAccess":
+                self._failed[action] = "El servidor X ya tiene esa combinacion reservada"
+            else:
+                self._failed[action] = f"X11 rechazo el atajo ({name})"
+
+        return handler
 
     def _resolve_keycode(self, display, key: str) -> int:
         from Xlib import XK
@@ -120,29 +128,41 @@ class ShortcutGrabber:
                         raise ValueError(f"Modificador desconocido: {modifier}")
                     mask |= getattr(X, bit)
                 keycode = self._resolve_keycode(connection, key)
-                root.grab_key(keycode, mask, on_error=self._error_handler, owner_events=False)
+                root.grab_key(
+                    keycode,
+                    mask,
+                    False,
+                    X.GrabModeAsync,
+                    X.GrabModeAsync,
+                    onerror=self._error_handler(action),
+                )
                 self._bindings[(keycode, mask)] = action
             except Exception as exc:
                 self._failed[action] = str(exc)
         try:
             root.change_attributes(event_mask=X.KeyPressMask)
-            connection.flush()
+            connection.sync()
         except Exception:
             pass
         self._ready.set()
 
         while not self._stop.is_set():
             try:
-                if not connection.pending_events():
-                    select.select([connection.fileno()], [], [], 0.2)
+                pending = connection.pending_events()
+                if not pending:
+                    readable, _, _ = select.select([connection.fileno()], [], [], 0.2)
+                    if not readable:
+                        continue
+                    pending = 1
+                for _ in range(pending):
+                    event = connection.next_event()
+                    if event.type == X.KeyPress:
+                        action = self._match(event.detail, event.state)
+                        if action:
+                            with contextlib.suppress(Exception):
+                                self._on_trigger(action)
             except Exception:
                 break
-            for event in connection.pending_events():
-                if event.type == X.KeyPress:
-                    action = self._match(event.detail, event.state)
-                    if action:
-                        with contextlib.suppress(Exception):
-                            self._on_trigger(action)
         with contextlib.suppress(Exception):
             connection.close()
         self._display = None

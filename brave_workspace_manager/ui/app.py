@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from PySide6.QtCore import QLockFile
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -42,6 +43,33 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _lock_owner_pid(path: Path) -> int:
+    """Lee el PID que escribio QLockFile en la primera linea."""
+    try:
+        first = path.read_text(encoding="utf-8").splitlines()[0].strip()
+    except (OSError, IndexError):
+        return 0
+    return int(first) if first.isdigit() else 0
+
+
+def _recover_stale_lock(lock: QLockFile, path: Path) -> bool:
+    """Libera el bloqueo si el proceso que lo creo ya no existe.
+
+    QLockFile solo considera un bloqueo rancio por antiguedad, y aqui la
+    antiguedad esta desactivada a proposito: si la aplicacion termina de
+    forma abrupta, el fichero se queda y bloquearia todos los arranques
+    siguientes. Comprobando el PID se recupera sin esperar.
+    """
+    pid = _lock_owner_pid(path)
+    if pid <= 0 or Path(f"/proc/{pid}").exists():
+        return False
+    try:
+        path.unlink()
+    except OSError:
+        return False
+    return lock.tryLock(100)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     ensure_dirs()
@@ -55,9 +83,10 @@ def main(argv: list[str] | None = None) -> int:
     app.setStyle("Fusion")
     app.setStyleSheet(STYLESHEET)
 
-    lock = QLockFile(str(data_dir() / "instance.lock"))
+    lock_path = data_dir() / "instance.lock"
+    lock = QLockFile(str(lock_path))
     lock.setStaleLockTime(0)
-    if not lock.tryLock(100):
+    if not lock.tryLock(100) and not _recover_stale_lock(lock, lock_path):
         QMessageBox.information(
             None,
             APP_NAME,
@@ -79,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
     window = MainWindow(controller, database)
     grabber = ShortcutGrabber(window.relay.triggered.emit)
     window.grabber = grabber
-    window._install_local_shortcuts()
+    window.start()
 
     controller.start()
 

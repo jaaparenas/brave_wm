@@ -29,7 +29,7 @@ proyecto usa [versionado semantico](https://semver.org/lang/es/).
   `wmctrl` y modo degradado sin soporte de ventanas.
 - Modo de linea de comandos: `--version`, `--minimized` y `--user-data-dir`.
 - Instancia unica mediante `QLockFile`.
-- 42 pruebas automaticas que no acceden a los datos reales del navegador.
+- 52 pruebas automaticas que no acceden a los datos reales del navegador.
 - Publicacion en GitHub con licencia MIT, empaquetado `pyproject.toml`,
   instaladores, servicio de systemd de usuario e integracion continua.
 
@@ -39,3 +39,16 @@ proyecto usa [versionado semantico](https://semver.org/lang/es/).
 - Sin acceso a cookies, contrasenas, historial, URLs ni trafico HTTPS.
 - La creacion y el renombrado de perfiles se delegan en el gestor nativo de
   Brave.
+
+### Corregido
+
+- Los atajos globales ya se reservan de verdad en el servidor X: se usa la
+  firma correcta de `grab_key` con manejador de error por peticion, y el
+  hilo de captura lee los eventos con `next_event()` en lugar de tratar
+  `pending_events()` como una lista.
+- Los atajos se registran despues de arrancar la aplicacion, de modo que ya
+  funcionan aunque el panel de administrador se abra mas tarde.
+- La ventana de la propia aplicacion ya no aparece en el panel de ventanas de
+  Brave: se filtra por PID propio y por clase `brave-browser`.
+- Si la aplicacion termina de forma abrupta, el fichero de instancia se
+  recupera solo cuando el proceso que lo creo ya no existe.
