@@ -41,9 +41,9 @@ dev = [
 brave-workspace-manager = "brave_workspace_manager.ui.app:main"
 
 [project.urls]
-Homepage = "https://github.com/jaaparenas/brave-workspace-manager"
-Repository = "https://github.com/jaaparenas/brave-workspace-manager"
-Issues = "https://github.com/jaaparenas/brave-workspace-manager/issues"
+Homepage = "https://github.com/jaaparenas/brave_wm"
+Repository = "https://github.com/jaaparenas/brave_wm"
+Issues = "https://github.com/jaaparenas/brave_wm/issues"
 
 [tool.setuptools.packages.find]
 include = ["brave_workspace_manager*"]

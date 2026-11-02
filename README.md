@@ -119,8 +119,8 @@ locally, kept in memory only, and never stored or sent anywhere.
 ## Installation
 
 ```bash
-git clone https://github.com/jaaparenas/brave-workspace-manager.git
-cd brave-workspace-manager
+git clone https://github.com/jaaparenas/brave_wm.git
+cd brave_wm
 ./install.sh
 ```
 

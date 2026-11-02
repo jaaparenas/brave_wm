@@ -1,6 +1,6 @@
 [Unit]
 Description=Brave Workspace Manager
-Documentation=https://github.com/jaaparenas/brave-workspace-manager
+Documentation=https://github.com/jaaparenas/brave_wm
 After=graphical-session.target
 PartOf=graphical-session.target
 

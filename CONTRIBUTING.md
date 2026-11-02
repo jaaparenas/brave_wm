@@ -6,8 +6,8 @@ documented, so it should be easy to follow the reasoning behind them.
 ## Setup
 
 ```bash
-git clone https://github.com/jaaparenas/brave-workspace-manager.git
-cd brave-workspace-manager
+git clone https://github.com/jaaparenas/brave_wm.git
+cd brave_wm
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/pip install pytest pytest-cov ruff
