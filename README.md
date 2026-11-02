@@ -239,7 +239,7 @@ original en [docs/SPECIFICATION.md](docs/SPECIFICATION.md).
 ## Desarrollo y pruebas
 
 ```bash
-.venv/bin/python -m pytest -q        # 95 pruebas, sin necesidad de navegador abierto
+.venv/bin/python -m pytest -q        # 96 pruebas, sin necesidad de navegador abierto
 .venv/bin/python -m pytest --cov     # con cobertura
 ```
 

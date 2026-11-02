@@ -37,7 +37,7 @@ proyecto usa [versionado semantico](https://semver.org/lang/es/).
   aplicacion avisa de que solo se ve la pestana activa.
 - Ajuste **Listar las pestanas abiertas** para desactivar la lectura y el flag
   del navegador.
-- 95 pruebas automaticas que no acceden a los datos reales del navegador.
+- 96 pruebas automaticas que no acceden a los datos reales del navegador.
 - Publicacion en GitHub con licencia MIT, empaquetado `pyproject.toml`,
   instaladores, servicio de systemd de usuario e integracion continua.
 
