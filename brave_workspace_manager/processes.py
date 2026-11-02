@@ -111,6 +111,34 @@ def browser_processes(processes: Iterable[BrowserProcess]) -> list[BrowserProces
     return [process for process in processes if process.kind == BROWSER_TYPE]
 
 
+def accesibilidad_activada(processes: Iterable[BrowserProcess]) -> bool:
+    """True si algun proceso del navegador se abrio con el modo de accesibilidad."""
+    return any(accesibilidad_por_pid(processes).values())
+
+
+def accesibilidad_por_pid(processes: Iterable[BrowserProcess]) -> dict[int, bool]:
+    """Que proceso del navegador se abrio con el modo de accesibilidad.
+
+    Chromium solo publica su interfaz por AT-SPI cuando se arranca con
+    ``--force-renderer-accessibility``; si el navegador ya estaba en marcha, el
+    proceso no lo lleva y sus ventanas no muestran mas que la pestana activa.
+    """
+    resultado: dict[int, bool] = {}
+    for proceso in processes:
+        if proceso.kind != BROWSER_TYPE:
+            continue
+        resultado[proceso.pid] = _flag_accesibilidad(proceso.cmdline)
+    return resultado
+
+
+def _flag_accesibilidad(cmdline: list[str]) -> bool:
+    flag = "--force-renderer-accessibility"
+    for argumento in cmdline:
+        if argumento == flag or argumento.startswith(f"{flag}="):
+            return True
+    return flag in " ".join(cmdline)
+
+
 def match_profile_directory(
     target: str, user_data_dir: Path, known_profiles: set[str]
 ) -> str | None:

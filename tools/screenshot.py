@@ -19,12 +19,13 @@ sys.path.insert(0, str(RAIZ))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QCoreApplication, QEvent
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QToolButton
 
 from brave_workspace_manager.core.controller import AppController
 from brave_workspace_manager.core.launcher import ProfileLauncher
 from brave_workspace_manager.database import Database
 from brave_workspace_manager.models import WindowInfo
+from brave_workspace_manager.tabs import FrameTabs
 from brave_workspace_manager.ui import icons
 from brave_workspace_manager.ui.main_window import MainWindow
 from brave_workspace_manager.ui.theme import STYLESHEET
@@ -49,12 +50,18 @@ VENTANAS = [
         title="Work · Panel de control",
         wm_class="brave-browser",
         is_active=True,
+        tab_count=3,
+        tab_titles=["Panel de control", "Calendario", "Notas del equipo"],
+        active_tab=0,
     ),
     WindowInfo(
         window_id=0x400002,
         pid=100,
         title="Documentación de ejemplo",
         wm_class="brave-browser",
+        tab_count=1,
+        tab_titles=["Documentación de ejemplo"],
+        active_tab=0,
     ),
     WindowInfo(
         window_id=0x400003,
@@ -62,6 +69,9 @@ VENTANAS = [
         title="Trabajo · Cuadro de mando",
         wm_class="brave-browser",
         is_minimized=True,
+        tab_count=2,
+        tab_titles=["Cuadro de mando", "Informes"],
+        active_tab=1,
     ),
 ]
 
@@ -88,6 +98,30 @@ class BackendFalso:
 
     def active_window(self) -> int | None:
         return VENTANAS[0].window_id
+
+
+class LectorFalso:
+    """Pestanas simuladas para las capturas."""
+
+    motivo = ""
+    disponible = True
+
+    def read(self) -> list[FrameTabs]:
+        return [
+            FrameTabs(
+                title="Work · Panel de control",
+                titles=["Panel de control", "Calendario", "Notas del equipo"],
+                active=0,
+            ),
+            FrameTabs(
+                title="Documentación de ejemplo", titles=["Documentación de ejemplo"], active=0
+            ),
+            FrameTabs(
+                title="Trabajo · Cuadro de mando",
+                titles=["Cuadro de mando", "Informes"],
+                active=1,
+            ),
+        ]
 
 
 def directorio_falso(base: Path) -> Path:
@@ -132,6 +166,7 @@ def main() -> int:
             BackendFalso(),
             ProfileLauncher("/usr/bin/brave-browser", raiz),
             user_data_dir=raiz,
+            tab_reader=LectorFalso(),
         )
         controller.refresh()
 
@@ -140,6 +175,10 @@ def main() -> int:
         ventana.show()
         app.processEvents()
         QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        app.processEvents()
+        for boton in ventana.findChildren(QToolButton):
+            boton.setChecked(True)
+            break
         app.processEvents()
         ventana.grab().save(str(DESTINO / "ventana-principal.png"))
 

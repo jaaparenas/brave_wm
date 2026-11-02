@@ -55,3 +55,31 @@ def test_browser_processes_filters_by_kind() -> None:
         BrowserProcess(pid=3, kind="browser"),
     ]
     assert [p.pid for p in processes.browser_processes(processes_list)] == [1, 3]
+
+
+def test_detects_the_accessibility_flag() -> None:
+    cmdline = ["brave-browser", "--profile-directory=Default", "--force-renderer-accessibility"]
+    proceso = processes.BrowserProcess(pid=1, kind="browser", cmdline=cmdline)
+    assert processes.accesibilidad_activada([proceso]) is True
+
+
+def test_without_the_accessibility_flag_it_is_disabled() -> None:
+    proceso = processes.BrowserProcess(pid=1, kind="browser", cmdline=["brave-browser"])
+    assert processes.accesibilidad_activada([proceso]) is False
+
+
+def test_child_processes_do_not_count() -> None:
+    proceso = processes.BrowserProcess(
+        pid=2, kind="renderer", cmdline=["brave --type=renderer --force-renderer-accessibility"]
+    )
+    assert processes.accesibilidad_activada([proceso]) is False
+
+
+def test_accesibilidad_por_pid() -> None:
+    """Cada proceso del navegador se comprueba por separado."""
+    con_flag = processes.BrowserProcess(
+        pid=10, kind="browser", cmdline=["brave-browser", "--force-renderer-accessibility"]
+    )
+    sin_flag = processes.BrowserProcess(pid=20, kind="browser", cmdline=["brave-browser"])
+    mapa = processes.accesibilidad_por_pid([con_flag, sin_flag])
+    assert mapa == {10: True, 20: False}

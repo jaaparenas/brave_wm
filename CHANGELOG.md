@@ -29,7 +29,15 @@ proyecto usa [versionado semantico](https://semver.org/lang/es/).
   `wmctrl` y modo degradado sin soporte de ventanas.
 - Modo de linea de comandos: `--version`, `--minimized` y `--user-data-dir`.
 - Instancia unica mediante `QLockFile`.
-- 62 pruebas automaticas que no acceden a los datos reales del navegador.
+- Recuento de las pestanas abiertas de cada ventana y de cada perfil, leidas
+  del arbol de accesibilidad del navegador (AT-SPI) en un proceso aparte, con
+  la lista de titulos desplegable y la pestana activa marcada. El lanzador
+  abre los perfiles con `--force-renderer-accessibility`, sin el cual Chromium
+  no publica su barra de pestanas; si el navegador ya estaba en marcha, la
+  aplicacion avisa de que solo se ve la pestana activa.
+- Ajuste **Listar las pestanas abiertas** para desactivar la lectura y el flag
+  del navegador.
+- 95 pruebas automaticas que no acceden a los datos reales del navegador.
 - Publicacion en GitHub con licencia MIT, empaquetado `pyproject.toml`,
   instaladores, servicio de systemd de usuario e integracion continua.
 
@@ -51,6 +59,9 @@ proyecto usa [versionado semantico](https://semver.org/lang/es/).
 - Sin acceso a cookies, contrasenas, historial, URLs ni trafico HTTPS.
 - La creacion y el renombrado de perfiles se delegan en el gestor nativo de
   Brave.
+- De la barra de pestanas solo se lee el titulo de cada pestaña, en memoria:
+  no se guarda en disco ni se envia a ninguna parte, y no se leen URLs,
+  cookies ni historial.
 
 ### Corregido
 

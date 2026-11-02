@@ -78,6 +78,7 @@ class ProfileSummary(QFrame):
             ("closed", "Cerrados"),
             ("favorites", "Favoritos"),
             ("windows", "Ventanas de Brave"),
+            ("tabs", "Pestañas abiertas"),
             ("unassigned", "Sin asignar"),
         )
         for row, (key, text) in enumerate(rows):
@@ -116,11 +117,13 @@ class ProfileSummary(QFrame):
         opened = sum(1 for profile in profiles if profile.is_open)
         favorites = sum(1 for profile in profiles if profile.is_favorite)
         unassigned = sum(1 for window in windows if not window.profile_id)
+        tabs = sum(window.tab_count for window in windows)
         self._values["total"].setText(str(total))
         self._values["open"].setText(str(opened))
         self._values["closed"].setText(str(total - opened))
         self._values["favorites"].setText(str(favorites))
         self._values["windows"].setText(str(len(windows)))
+        self._values["tabs"].setText(str(tabs))
         self._values["unassigned"].setText(str(unassigned))
         self._active.setText(active_label or "—")
 

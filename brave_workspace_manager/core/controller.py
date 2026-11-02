@@ -6,12 +6,13 @@ import os
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, QThread, QTimer, Signal
 
 from .. import discovery, processes
 from ..config import brave_user_data_dir
 from ..database import Database
 from ..models import MatchMethod, Profile, WindowInfo
+from ..tabs import FrameTabs, TabReader, emparejar
 from ..x11.base import WindowBackend
 from .launcher import ProfileLauncher
 from .resolver import ResolutionContext, WindowResolver
@@ -30,6 +31,24 @@ PROFILE_PALETTE = (
 )
 
 LAUNCH_LEARNING_SECONDS = 20.0
+TAB_INTERVAL_SECONDS = 10.0
+
+
+class TabReaderThread(QThread):
+    """Lee las pestanas de Brave fuera del hilo de la interfaz."""
+
+    tabsRead = Signal(list)
+
+    def __init__(self, reader: TabReader) -> None:
+        super().__init__()
+        self._reader = reader
+
+    def run(self) -> None:  # pragma: no cover - depende del entorno
+        try:
+            frames = self._reader.read()
+        except Exception:
+            frames = []
+        self.tabsRead.emit(frames)
 
 
 class AppController(QObject):
@@ -47,6 +66,7 @@ class AppController(QObject):
         backend: WindowBackend,
         launcher: ProfileLauncher,
         user_data_dir: Path | None = None,
+        tab_reader: object | None = None,
     ) -> None:
         super().__init__()
         self.database = database
@@ -62,6 +82,13 @@ class AppController(QObject):
         self._launch_target: str | None = None
         self._launch_deadline = 0.0
         self._baseline_window_ids: set[int] = set()
+        self.tab_reader = tab_reader or TabReader()
+        self._frames: list[FrameTabs] = []
+        self._tab_thread: TabReaderThread | None = None
+        self._last_tab_read = 0.0
+        self._leer_pestanas = True
+        self._sin_accesibilidad: set[int] = set()
+        self._navegador_abierto = False
 
     # ------------------------------------------------------------ ciclo de vida
 
@@ -76,6 +103,9 @@ class AppController(QObject):
         if self._timer is not None:
             self._timer.stop()
             self._timer = None
+        if self._tab_thread is not None:
+            self._tab_thread.wait(3000)
+            self._tab_thread = None
 
     def set_poll_interval(self, milliseconds: int) -> None:
         self.poll_interval_ms = max(500, int(milliseconds))
@@ -98,6 +128,33 @@ class AppController(QObject):
     def unassigned_windows(self) -> list[WindowInfo]:
         return [w for w in self.windows if not w.profile_id]
 
+    @property
+    def tabs_status(self) -> str:
+        """Aviso sobre la lectura de pestanas; vacio si funciona."""
+        if not self._leer_pestanas:
+            return ""
+        motivo = self.tab_reader.motivo
+        if motivo:
+            return f"No se puede leer el número de pestañas: {motivo}"
+        if self._sin_accesibilidad:
+            return (
+                "Brave está en marcha sin el modo de accesibilidad, así que solo se ve "
+                "la pestaña activa de cada ventana. Cierra Brave del todo y vuelve a "
+                "abrir un perfil desde la aplicación para listar todas las pestañas."
+            )
+        return ""
+
+    def set_read_tabs(self, enabled: bool) -> None:
+        """Activa o desactiva la lectura de pestañas y el flag del lanzador."""
+        self._leer_pestanas = bool(enabled)
+        self.launcher.leer_pestanas = self._leer_pestanas
+        if not self._leer_pestanas:
+            self._frames = []
+            self._aplicar_pestanas(self.windows, [])
+        else:
+            self._last_tab_read = 0.0
+            self._programar_lectura_pestanas()
+
     def select(self, profile_id: str) -> None:
         self.selected_profile_id = profile_id
         self.selectionChanged.emit(profile_id)
@@ -110,10 +167,15 @@ class AppController(QObject):
 
         process_list = processes.scan_brave_processes()
         browser_pids = [p.pid for p in processes.browser_processes(process_list)]
+        self._navegador_abierto = bool(browser_pids)
+        accesibilidad = processes.accesibilidad_por_pid(process_list)
         known_dirs = {p.directory_name for p in self.profiles}
         open_dirs = processes.profile_dirs_in_use(browser_pids, self.user_data_dir, known_dirs)
 
         windows = self._brave_windows(process_list)
+        self._sin_accesibilidad = {
+            w.window_id for w in windows if w.pid in accesibilidad and not accesibilidad[w.pid]
+        }
         self._learn_from_launch(windows)
 
         assignments = self.database.load_assignments()
@@ -130,6 +192,41 @@ class AppController(QObject):
             profile.window_count = sum(1 for w in windows if w.profile_id == profile.id)
 
         self.windows = windows
+        self._aplicar_pestanas(windows, self._frames)
+        self._programar_lectura_pestanas()
+        self.profilesChanged.emit()
+        self.windowsChanged.emit()
+
+    # -------------------------------------------------------------- pestanas
+
+    def _aplicar_pestanas(self, windows: list[WindowInfo], frames: list[FrameTabs]) -> None:
+        """Reparte las pestanas leidas entre las ventanas y los perfiles."""
+        pares = emparejar(frames, windows) if frames else {}
+        for window in windows:
+            frame = pares.get(window.window_id)
+            window.tab_count = frame.count if frame else 0
+            window.tab_titles = list(frame.titles) if frame else []
+            window.active_tab = frame.active if frame else -1
+        for profile in self.profiles:
+            profile.tab_count = sum(w.tab_count for w in windows if w.profile_id == profile.id)
+
+    def _programar_lectura_pestanas(self) -> None:
+        if not self._leer_pestanas:
+            return
+        if self._tab_thread is not None and self._tab_thread.isRunning():
+            return
+        ahora = time.monotonic()
+        if ahora - self._last_tab_read < TAB_INTERVAL_SECONDS:
+            return
+        self._last_tab_read = ahora
+        if self._tab_thread is None:
+            self._tab_thread = TabReaderThread(self.tab_reader)
+            self._tab_thread.tabsRead.connect(self._on_tabs_read)
+        self._tab_thread.start()
+
+    def _on_tabs_read(self, frames: list) -> None:
+        self._frames = frames
+        self._aplicar_pestanas(self.windows, frames)
         self.profilesChanged.emit()
         self.windowsChanged.emit()
 

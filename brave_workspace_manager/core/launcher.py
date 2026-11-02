@@ -7,13 +7,18 @@ from pathlib import Path
 
 PROFILE_MANAGER_URL = "brave://settings/manageProfile"
 
+# Chromium solo publica su interfaz (barra de pestanas incluida) por AT-SPI si
+# el navegador se abre con el modo de accesibilidad activado.
+FLAG_ACCESIBILIDAD = "--force-renderer-accessibility"
+
 
 class ProfileLauncher:
     """Invoca el ejecutable de Brave con el directorio de perfil nativo."""
 
-    def __init__(self, binary: str | None, user_data_dir: Path) -> None:
+    def __init__(self, binary: str | None, user_data_dir: Path, leer_pestanas: bool = True) -> None:
         self.binary = binary
         self.user_data_dir = Path(user_data_dir)
+        self.leer_pestanas = leer_pestanas
 
     @property
     def available(self) -> bool:
@@ -22,6 +27,8 @@ class ProfileLauncher:
     def _spawn(self, args: list[str]) -> bool:
         if not self.binary:
             return False
+        if self.leer_pestanas:
+            args = [*args, FLAG_ACCESIBILIDAD]
         try:
             subprocess.Popen(
                 [self.binary, *args],

@@ -115,6 +115,22 @@ class X11Backend:
                 continue
         return names
 
+    def _geometry(self, window) -> tuple[int, int, int, int]:
+        """Posicion y tamano de la ventana en coordenadas de pantalla."""
+        try:
+            geo = window.get_geometry()
+            x, y = geo.x, geo.y
+            width, height = geo.width, geo.height
+        except Exception:
+            return (0, 0, 0, 0)
+        try:
+            root = self._display().screen().root
+            coords = root.translate_coords(window, 0, 0)
+            x, y = coords.x, coords.y
+        except Exception:
+            pass
+        return (int(x), int(y), int(width), int(height))
+
     # ------------------------------------------------------------- ventanas
 
     def list_windows(self) -> list[WindowInfo]:
@@ -138,6 +154,7 @@ class X11Backend:
                 wm_class = self._text_property(window, "WM_CLASS").replace("\0", " ")
                 pid = self._int_property(window, "_NET_WM_PID")
                 states = self._state_names(window)
+                geometry = self._geometry(window)
             except Exception:
                 continue
             windows.append(
@@ -150,6 +167,10 @@ class X11Backend:
                     is_minimized=(
                         "_NET_WM_STATE_HIDDEN" in states or "_NET_WM_STATE_MINIMIZED" in states
                     ),
+                    x=geometry[0],
+                    y=geometry[1],
+                    width=geometry[2],
+                    height=geometry[3],
                 )
             )
         return windows

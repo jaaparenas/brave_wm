@@ -23,6 +23,7 @@ internos de Brave**.
 - [Instalacion](#instalacion)
 - [Uso](#uso)
 - [Como se asocia cada ventana con su perfil](#como-se-asociada-cada-ventana-con-su-perfil)
+- [Como se cuentan las pestanas abiertas](#como-se-cuentan-las-pestanas-abiertas)
 - [Atajos de teclado](#atajos-de-teclado)
 - [Reglas de seguridad](#reglas-de-seguridad)
 - [Donde guarda los datos](#donde-guarda-los-datos)
@@ -43,6 +44,8 @@ internos de Brave**.
   la abre en su directorio nativo (`--profile-directory=Default`) si no.
 - **Gestiona las ventanas** de Brave: activar, minimizar, restaurar y asignar
   manualmente una ventana a un perfil.
+- **Cuenta las pestanas abiertas** de cada ventana y de cada perfil, y muestra
+  cuales son y cual esta en primer plano.
 - **Aprende** la correspondencia ventana-perfil con el uso, de modo que las
   asignaciones se repiten cada vez que se lanzan los perfiles desde la app.
 - **Personaliza** cada perfil con un nombre visible, color, icono y marca de
@@ -60,6 +63,7 @@ internos de Brave**.
 | Navegador | Brave instalado (`brave-browser` en el `PATH` o `/opt/brave.com/brave/brave`) |
 | Python | 3.10 o superior |
 | Dependencias | `PySide6` (interfaz) y `python-xlib` (protocolo X11, sin dependencias del sistema) |
+| Opcional | `python3-gi` (PyGObject) para leer las pestanas por AT-SPI; sin el, la app funciona igual pero solo muestra la pestana activa |
 
 > En Wayland la gestion de ventanas no es posible de forma fiable, por lo que la
 > aplicacion funciona en modo degradado: descubre perfiles y los abre, pero no
@@ -101,10 +105,11 @@ La ventana principal tiene cuatro zonas:
    de la ventana y el conjunto queda centrado. Un clic selecciona el perfil,
    doble clic lo abre y el menu contextual da acceso a las acciones rapidas.
    A la izquierda, el **resumen** permanece siempre visible con el numero de
-   perfiles, los abiertos, los favoritos, las ventanas de Brave detectadas y el
-   perfil activo.
+   perfiles, los abiertos, los favoritos, las ventanas de Brave detectadas, las
+   pestanas abiertas y el perfil activo.
 2. **Panel de ventanas**: las ventanas de Brave asociadas al perfil
-   seleccionado, con acciones de activar, minimizar y restaurar.
+   seleccionado, con acciones de activar, minimizar y restaurar, y el numero de
+   pestanas de cada una.
 3. **Ventanas sin asignar**: las ventanas que Chromium no permite identificar
    de forma automatica; se pueden asignar a mano con el desplegable o con el
    boton **Tomar la ventana activa**.
@@ -138,6 +143,30 @@ inspeccionan sus descriptores (`/proc/<pid>/fd`).
 Las asignaciones aprendidas se conservan por PID de navegador y por
 identificador de ventana, de modo que se reutilizan en sesiones posteriores.
 
+## Como se cuentan las pestanas abiertas
+
+Chromium no expone por X11/EWMH quantas pestanas tiene una ventana: por ese
+protocolo solo se ve el titulo de la ventana, que es el de la pestana activa.
+La unica via local que no toca los datos del navegador es el **arbol de
+accesibilidad** (AT-SPI), el mismo que usa un lector de pantalla.
+
+- La aplicacion ejecuta `brave_workspace_manager/a11y_helper.py` en un proceso
+  aparte (el entorno virtual puede no tener PyGObject) y recibe un JSON con las
+  ventanas y sus pestanas.
+- Chromium solo publica su interfaz, y con ella la barra de pestanas, cuando se
+  abre con `--force-renderer-accessibility`. Por eso el lanzador anade ese flag a
+  los perfiles que abre la aplicacion. Si Brave ya estaba en marcha, hay que
+  cerrarlo del todo y volver a abrir un perfil desde la app; mientras tanto la
+  ventana avisa de que solo se ve la pestana activa.
+- Cada ventana de Brave muestra un boton con el numero de pestanas; al
+  desplegarlo aparece la lista de titulos, con la pestana activa marcada.
+- El resumen de la izquierda cuenta las pestanas abiertas de todos los perfiles.
+
+Solo se leen los **titulos** de las pestanas, y solo en memoria: no se guardan
+en disco ni se envian a ninguna parte. La opcion **Listar las pestanas
+abiertas** del panel de administrador desactiva la lectura y deja de anadir el
+flag al navegador.
+
 ## Atajos de teclado
 
 | Atajo | Accion |
@@ -164,6 +193,11 @@ La aplicacion **solo lee** el directorio de datos de Brave:
 - Todo lo que la aplicacion guarda (preferencias de la app, asignaciones
   aprendidas) vive en `~/.local/share/brave-workspace-manager/`.
 
+Lo unico que se lee fuera de ese directorio son los **titulos de las pestanas**
+que el navegador publica por AT-SPI cuando se abre con el modo de
+accesibilidad activado. No se leen URLs, ni cookies, ni el historial, y esos
+titulos no se guardan en ningun sitio.
+
 ## Donde guarda los datos
 
 | Que | Donde |
@@ -184,6 +218,8 @@ brave_workspace_manager/
 ├── discovery.py         lectura de Local State y carpetas de perfil
 ├── processes.py         inspeccion de /proc y perfiles abiertos
 ├── database.py          persistencia SQLite
+├── a11y_helper.py       lectura de pestanas por AT-SPI (script autonomo)
+├── tabs.py              cliente del ayudante y emparejamiento con las ventanas
 ├── core/
 │   ├── controller.py    estado de la aplicacion y acciones
 │   ├── resolver.py      cascada de reglas ventana -> perfil
@@ -203,7 +239,7 @@ original en [docs/SPECIFICATION.md](docs/SPECIFICATION.md).
 ## Desarrollo y pruebas
 
 ```bash
-.venv/bin/python -m pytest -q        # 42 pruebas, sin necesidad de navegador abierto
+.venv/bin/python -m pytest -q        # 95 pruebas, sin necesidad de navegador abierto
 .venv/bin/python -m pytest --cov     # con cobertura
 ```
 

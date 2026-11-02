@@ -246,10 +246,12 @@ class MainWindow(QMainWindow):
             "hotkeys_enabled": self.database.get_setting("hotkeys_enabled", "1"),
             "tray_enabled": self.database.get_setting("tray_enabled", "0"),
             "autostart": self.database.get_setting("autostart", "0"),
+            "read_tabs": self.database.get_setting("read_tabs", "1"),
         }
         self._activate_on_click = settings["activate_on_click"] == "1"
         self._admin_panel.set_settings(settings)
         self.controller.set_poll_interval(int(settings["poll_interval"]))
+        self.controller.set_read_tabs(settings["read_tabs"] == "1")
         self._tray_button.setChecked(settings["tray_enabled"] == "1")
         self._admin_panel.set_shortcuts(self._shortcut_bindings())
         if settings["hotkeys_enabled"] == "1":
@@ -299,6 +301,7 @@ class MainWindow(QMainWindow):
         self._window_panel.set_unassigned(
             self.controller.unassigned_windows(), self.controller.profiles
         )
+        self._window_panel.set_tabs_status(self.controller.tabs_status)
         self._status_label.setText(
             f"Backend: {self.controller.backend.name} · Sesion: {session_type()} "
             f"· Escritorio: {desktop_environment() or 'desconocido'}"
@@ -353,6 +356,8 @@ class MainWindow(QMainWindow):
                 autostart.enable(autostart.python_command())
             else:
                 autostart.disable()
+        elif key == "read_tabs":
+            self.controller.set_read_tabs(value == "1")
 
     def _on_shortcut_changed(self, action: str, sequence: str) -> None:
         self.database.set_setting(f"shortcut.{action}", sequence)

@@ -252,6 +252,16 @@ class AdminPanel(QWidget):
         )
         form.addRow("", self._autostart_check)
 
+        self._tabs_check = QCheckBox("Listar las pestañas abiertas")
+        self._tabs_check.setToolTip(
+            "Abre Brave con el modo de accesibilidad activado para poder ver todas "
+            "las pestañas de cada ventana. Solo se lee el titulo de cada pestaña."
+        )
+        self._tabs_check.toggled.connect(
+            lambda state: self.settingChanged.emit("read_tabs", "1" if state else "0")
+        )
+        form.addRow("", self._tabs_check)
+
         layout.addLayout(form)
         return box
 
@@ -327,6 +337,7 @@ class AdminPanel(QWidget):
             settings.get("tray_enabled", "0") == "0" or settings.get("tray_enabled", "1") == "1"
         )
         self._autostart_check.setChecked(settings.get("autostart", "0") == "1")
+        self._tabs_check.setChecked(settings.get("read_tabs", "1") == "1")
         self._loading = False
 
     def select_profile(self, profile_id: str) -> None:

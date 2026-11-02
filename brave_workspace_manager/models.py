@@ -29,6 +29,7 @@ class Profile:
     is_favorite: bool = False
     is_open: bool = False
     window_count: int = 0
+    tab_count: int = 0
     avatar_path: str | None = None
     active_time: float | None = None
     custom: bool = False
@@ -41,9 +42,11 @@ class Profile:
     def status_text(self) -> str:
         if not self.is_open:
             return "Cerrado"
-        if self.window_count == 1:
-            return "Abierto · 1 ventana"
-        return f"Abierto · {self.window_count} ventanas"
+        ventanas = "1 ventana" if self.window_count == 1 else f"{self.window_count} ventanas"
+        if self.tab_count:
+            pestanas = "1 pestaña" if self.tab_count == 1 else f"{self.tab_count} pestañas"
+            return f"Abierto · {ventanas} · {pestanas}"
+        return f"Abierto · {ventanas}"
 
 
 @dataclass(slots=True)
@@ -57,6 +60,13 @@ class WindowInfo:
     profile_id: str | None = None
     method: MatchMethod = MatchMethod.NONE
     confidence: float = 0.0
+    x: int = 0
+    y: int = 0
+    width: int = 0
+    height: int = 0
+    tab_count: int = 0
+    tab_titles: list[str] = field(default_factory=list)
+    active_tab: int = -1
 
     @property
     def state_text(self) -> str:
@@ -65,6 +75,12 @@ class WindowInfo:
         if self.is_minimized:
             return "Minimizada"
         return "En segundo plano"
+
+    @property
+    def tabs_text(self) -> str:
+        if not self.tab_count:
+            return ""
+        return "1 pestaña" if self.tab_count == 1 else f"{self.tab_count} pestañas"
 
 
 @dataclass(slots=True)

@@ -47,3 +47,20 @@ def test_spawn_failure_is_reported(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(subprocess, "Popen", explode)
     launcher = ProfileLauncher("/usr/bin/brave-browser", tmp_path)
     assert launcher.launch("Default") is False
+
+
+def test_launch_enables_the_accessibility_mode(monkeypatch, tmp_path: Path) -> None:
+    """Sin el flag Chromium no publica la barra de pestanas por AT-SPI."""
+    recorder = _Recorder()
+    monkeypatch.setattr(subprocess, "Popen", recorder)
+    launcher = ProfileLauncher("/usr/bin/brave-browser", tmp_path)
+    launcher.launch("Default")
+    assert "--force-renderer-accessibility" in recorder.commands[0]
+
+
+def test_launch_without_tabs_reading_has_no_accessibility_flag(monkeypatch, tmp_path: Path) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(subprocess, "Popen", recorder)
+    launcher = ProfileLauncher("/usr/bin/brave-browser", tmp_path, leer_pestanas=False)
+    launcher.launch("Default")
+    assert "--force-renderer-accessibility" not in recorder.commands[0]

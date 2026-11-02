@@ -36,6 +36,11 @@ perfiles funciona como funciona.
         │ database.py        │        │ core/launcher.py       │
         │ SQLite propio      │        │ Brave --profile-directory │
         └────────────────────┘        └────────────────────────┘
+
+        ┌────────────────────┐        ┌────────────────────────┐
+        │ tabs.py            │        │ a11y_helper.py         │
+        │ cliente + emparejado│       │ lector AT-SPI (JSON)   │
+        └────────────────────┘        └────────────────────────┘
 ```
 
 El controlador (`core/controller.py`) es el unico que conoce el estado
@@ -107,7 +112,39 @@ La regla 4 usa una expresion regular con limites de palabra
 Las asignaciones se indexan por `(window_id, browser_pid)`, de modo que
 reaparecen al volver a abrir el mismo perfil en una sesion posterior.
 
-## 4. Backends de ventanas
+## 4. Lectura de las pestanas abiertas
+
+Chromium no expone por X11/EWMH el numero de pestanas de una ventana: por ese
+protocolo solo se obtiene el titulo de la ventana, que es el de la pestana
+activa. La unica via local que no toca los datos del navegador es el **arbol de
+accesibilidad** (AT-SPI), el mismo que consumen los lectores de pantalla.
+
+El flujo tiene tres piezas:
+
+| Pieza | Fichero | Que hace |
+|---|---|---|
+| Lector | `a11y_helper.py` | Script autonomo (no importa el paquete) que recorre el escritorio AT-SPI, busca las ventanas de Brave y devuelve un JSON con sus pestanas. |
+| Cliente | `tabs.py` | Ejecuta el lector en un subproceso, prueba el interprete del entorno virtual y despues `/usr/bin/python3`, y empareja cada ventana con su frame por titulo normalizado y, si hace falta, por solape de geometria. |
+| Estado | `core/controller.py` | Reparte los titulos leidos entre las ventanas y los perfiles y publica el aviso cuando la lectura no es posible. |
+
+Detalles que condicionan el diseno:
+
+- **Chromium solo publica su interfaz** (barra de pestanas incluida) si se abre
+  con `--force-renderer-accessibility`. Por eso `core/launcher.py` anade ese
+  flag a los perfiles que abre la app. Si el navegador ya estaba en marcha, el
+  flag no surte efecto: `processes.accesibilidad_activada()` lo detecta y la
+  interfaz explica que solo se ve la pestana activa.
+- **La franja de pestanas** aparece como `page tab list` con un `page tab` por
+  pestana; la que esta en primer plano lleva el estado `selected`. Chromium
+  deja ademas una franja vacia y oculta, que se descarta.
+- **El contenido de la pagina no se lee**: el lector no baja a los subarboles
+  `document web`, de modo que solo se obtiene el titulo de cada pestaña. No se
+  leen URLs, cookies, contrasenas ni historial, y esos titulos no se guardan.
+- **La lectura es un subproceso y un hilo**: `TabReaderThread` la ejecuta fuera
+  del hilo de la interfaz, con un intervalo de 10 s, para que la ventana no se
+  congele.
+
+## 5. Backends de ventanas
 
 `x11/base.py` define el protocolo `WindowBackend` y `x11/__init__.py` elige la
 implementacion disponible:
@@ -121,7 +158,7 @@ implementacion disponible:
 Las acciones de activar y minimizar se hacen con `ClientMessage` de EWMH
 (`_NET_ACTIVE_WINDOW` y `_NET_WM_STATE`), que es lo que espera Muffin/Cinnamon.
 
-## 5. Atajos globales
+## 6. Atajos globales
 
 `x11/grab.py` monta un hilo con capturas pasivas de teclado (`grab_key`) sobre
 la ventana raiz de X11. Si la combinacion ya esta ocupada por otra aplicacion,
@@ -130,7 +167,7 @@ y deja ese atajo desactivado en lugar de fallar. Los atajos que funcionan con
 la ventana enfocada se registran ademas como `QShortcut` locales, de modo que
 siguen siendo utilizables aunque la captura global falle.
 
-## 6. Persistencia
+## 7. Persistencia
 
 SQLite en `~/.local/share/brave-workspace-manager/workspace.db`:
 
@@ -138,16 +175,19 @@ SQLite en `~/.local/share/brave-workspace-manager/workspace.db`:
 |---|---|
 | `profiles` | `id`, `directory_name`, `display_name`, `color`, `icon`, `sort_order`, `is_favorite`, marcas de tiempo. |
 | `window_assignments` | `window_id`, `browser_pid`, `profile_id`, `title`, `method`, marca de tiempo. Clave primaria compuesta `(window_id, browser_pid)`. |
-| `settings` | Preferencias de la aplicacion en pares clave/valor (intervalo de refresco, atajos, bandeja, inicio automatico). |
+| `settings` | Preferencias de la aplicacion en pares clave/valor (intervalo de refresco, atajos, bandeja, inicio automatico, lectura de pestanas). |
 
 El acceso es seguro entre hilos (`RLock` + `check_same_thread=False`) porque
 el hilo de capturas de teclado tambien consulta ajustes.
 
-## 7. Modelo de seguridad
+## 8. Modelo de seguridad
 
 - **Solo lectura** sobre el directorio de datos de Brave. No se escribe nunca
   en `Local State` ni en las bases de datos de los perfiles.
 - No se leen cookies, contrasenas, tokens, historial ni URLs.
+- De la barra de pestanas solo se lee el **titulo** de cada pestaña, en memoria:
+  no se persiste ni se transmite, y se puede desactivar por completo con el
+  ajuste «Listar las pestanas abiertas».
 - No se intercepta trafico ni se instalan certificados.
 - Crear o renombrar perfiles se delega en el gestor nativo de Brave
   (`brave://settings/manageProfile`); la app solo guarda el **nombre visible**
@@ -157,7 +197,7 @@ el hilo de capturas de teclado tambien consulta ajustes.
 - La aplicacion no necesita privilegios especiales: todo vive en el `$HOME` del
   usuario.
 
-## 8. Interfaz
+## 9. Interfaz
 
 - `ui/theme.py` define la paleta oscura y la hoja de estilos completa.
 - `ui/icons.py` dibuja los iconos de forma procedural (16 glifos) y genera el
@@ -175,7 +215,7 @@ el hilo de capturas de teclado tambien consulta ajustes.
   personalizacion, la tabla de atajos y los ajustes.
 - `ui/tray.py` ofrece el icono de bandeja con acceso rapido a los perfiles.
 
-## 9. Modo degradado y fallos previstos
+## 10. Modo degradado y fallos previstos
 
 | Situacion | Comportamiento |
 |---|---|
@@ -185,15 +225,22 @@ el hilo de capturas de teclado tambien consulta ajustes.
 | Brave no instalado | Se listan los perfiles existentes; el boton «Abrir perfil» avisa de que falta el ejecutable. |
 | Proceso de Brave que desaparece durante el recorrido | Se ignora sin abortar el refresco. |
 | Atajo global en conflicto | Se desactiva ese atajo y se avisa; el resto sigue funcionando. |
+| `python3-gi` ausente | No se puede leer el arbol de accesibilidad: se avisa y solo se muestra la pestana activa de cada ventana. |
+| Brave ya en marcha sin `--force-renderer-accessibility` | Se avisa de que hay que cerrar Brave del todo y abrir un perfil desde la app para listar las pestanas. |
 
-## 10. Limitaciones conocidas y trabajo futuro
+## 11. Limitaciones conocidas y trabajo futuro
 
 - La agrupacion exacta de ventanas por perfil no es posible cuando varios
   perfiles estan abiertos y ninguno se ha lanzado desde la app: en ese caso
   las ventanas quedan en «Ventanas sin asignar» hasta que se resuelven a mano
   o se vuelven a lanzar desde la aplicacion.
-- No se enumeran las pestañas individuales de Brave: Chromium no ofrece una
-  API publica estable para ello (apartado 4 del SRS).
+- Las pestanas se listan por su titulo, no por su URL: leer las URLs exigiria
+  abrir un puerto de depuracion de Chromium, que daria acceso a cookies y
+  credenciales de cualquier proceso local, y parsear los ficheros de sesion de
+  Chromium, que tambien las contienen. Ambas vias se descartan a proposito.
+- El recuento depende de que el navegador se haya abierto con el modo de
+  accesibilidad: si Brave estaba en marcha antes de usar la aplicacion, solo
+  se ve la pestana activa.
 - No hay soporte de Wayland mas alla del modo degradado.
 - El panel de administracion es funcional pero basico; el arbol de perfiles y
   la previsualizacion de pestañas quedan para fases posteriores.

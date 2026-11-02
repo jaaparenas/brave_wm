@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -50,6 +51,13 @@ class WindowCard(QFrame):
         meta.setObjectName("Muted")
         layout.addWidget(meta)
 
+        if window.tab_count:
+            self._add_tabs(layout, window)
+        else:
+            activa = QLabel("Solo se ve la pestaña activa de esta ventana.")
+            activa.setObjectName("Muted")
+            layout.addWidget(activa)
+
         actions = QHBoxLayout()
         actions.setSpacing(8)
         actions.addStretch(1)
@@ -76,6 +84,36 @@ class WindowCard(QFrame):
 
     def _elide(self, text: str) -> str:
         return self.fontMetrics().elidedText(text, Qt.ElideRight, 420)
+
+    def _add_tabs(self, layout: QVBoxLayout, window: WindowInfo) -> None:
+        """Boton con el numero de pestanas y la lista desplegable de titulos."""
+        boton = QToolButton()
+        boton.setText(window.tabs_text)
+        boton.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        boton.setArrowType(Qt.DownArrow)
+        boton.setCheckable(True)
+        boton.setAutoRaise(True)
+        boton.setToolTip("Pestañas abiertas en esta ventana:\n" + "\n".join(window.tab_titles))
+
+        lista = QWidget()
+        lista_layout = QVBoxLayout(lista)
+        lista_layout.setContentsMargins(12, 2, 0, 0)
+        lista_layout.setSpacing(2)
+        for indice, titulo in enumerate(window.tab_titles):
+            es_activa = indice == window.active_tab
+            etiqueta = QLabel(self._elide(titulo) or "(sin titulo)")
+            etiqueta.setToolTip(titulo)
+            if es_activa:
+                etiqueta.setText("▸ " + etiqueta.text())
+                etiqueta.setStyleSheet("font-weight: 600;")
+            else:
+                etiqueta.setObjectName("Muted")
+            lista_layout.addWidget(etiqueta)
+        lista.setVisible(False)
+        boton.toggled.connect(lista.setVisible)
+
+        layout.addWidget(boton)
+        layout.addWidget(lista)
 
     def _on_assign(self, index: int) -> None:
         combo = self.findChild(QComboBox)
@@ -122,6 +160,12 @@ class WindowPanel(QWidget):
         header.addWidget(self._open_button)
         root.addLayout(header)
 
+        self._tabs_note = QLabel()
+        self._tabs_note.setObjectName("Muted")
+        self._tabs_note.setWordWrap(True)
+        self._tabs_note.setVisible(False)
+        root.addWidget(self._tabs_note)
+
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -153,6 +197,11 @@ class WindowPanel(QWidget):
             self._title.setText(f"Ventanas de {profile.label}")
             self._adopt_button.setEnabled(True)
             self._open_button.setEnabled(True)
+
+    def set_tabs_status(self, text: str) -> None:
+        """Aviso sobre la lectura de pestanas (por que no aparece el numero)."""
+        self._tabs_note.setText(text)
+        self._tabs_note.setVisible(bool(text))
 
     def set_windows(self, windows: list[WindowInfo], profiles: list[Profile]) -> None:
         self._clear(self._windows_layout)
