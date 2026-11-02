@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Brave Workspace Manager
+GenericName=Gestor de perfiles de Brave
+Comment=Administra los perfiles nativos de Brave desde una sola ventana
+Exec=@PYTHON@ -m brave_workspace_manager
+TryExec=@PYTHON@
+Icon=brave-workspace-manager
+Terminal=false
+Categories=Utility;Network;
+Keywords=brave;browser;profiles;perfiles;workspace;
+StartupNotify=true
+StartupWMClass=BraveWorkspaceManager

@@ -1,0 +1,15 @@
+[Unit]
+Description=Brave Workspace Manager
+Documentation=https://github.com/jaaparenas/brave-workspace-manager
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/brave-workspace-manager --minimized
+Restart=on-failure
+RestartSec=5
+Environment=DISPLAY=:0
+
+[Install]
+WantedBy=default.target

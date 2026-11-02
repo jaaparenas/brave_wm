@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brave-workspace-manager"
+version = "1.0.0"
+description = "Administrador de perfiles nativos de Brave para Linux Mint / Cinnamon"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Jorge Arenas", email = "jaaparenas@gmail.com" }]
+keywords = ["brave", "browser", "profiles", "linux", "cinnamon", "x11", "pyside6"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: Spanish",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Desktop Environment",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "PySide6>=6.5",
+    "python-xlib>=0.33",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+]
+
+[project.scripts]
+brave-workspace-manager = "brave_workspace_manager.ui.app:main"
+
+[project.urls]
+Homepage = "https://github.com/jaaparenas/brave-workspace-manager"
+Repository = "https://github.com/jaaparenas/brave-workspace-manager"
+Issues = "https://github.com/jaaparenas/brave-workspace-manager/issues"
+
+[tool.setuptools.packages.find]
+include = ["brave_workspace_manager*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["brave_workspace_manager"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "E501", # el formateador se encarga del límite de longitud
+    "N815", # las señales de Qt siguen la convención camelCase
+    "SIM108", # los ternarios anidados son más legibles aquí
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["N802", "E402"]
+"tools/*" = ["E402"]
