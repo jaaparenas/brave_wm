@@ -194,13 +194,19 @@ guess: it applies a cascade of rules, from most to least reliable, and
 |---|---|---|---|
 | 1 | Learned assignment | 100 % | Stored in the local database when the app launches a profile or when the user assigns a window by hand. |
 | 2 | Single open profile | 90 % | If only one profile is open, every Brave window belongs to it. |
-| 3 | Window title | 60 % | The profile name appears as a whole word in the title (`Work · Dashboard`). |
-| 4 | Elimination | 50 % | If exactly one window is unassigned and exactly one open profile has no windows, they belong together. |
-| 5 | Unassigned | 0 % | Shown on the **Unassigned windows** card for you to resolve. |
+| 3 | Elimination | 50 % | If exactly one window is unassigned and exactly one open profile has no windows, they belong together. |
+| 4 | Unassigned | 0 % | Shown on the **Unassigned windows** card for you to resolve. |
 
 **Open** profiles, on the other hand, are detected reliably: the browser
 process keeps files open inside the profile folder, and its file descriptors
 (`/proc/<pid>/fd`) are inspected.
+
+The window title is **not** used: it is the title of the active page, and a
+page can mention any profile name (a chat about "Work" may be open in another
+profile). Guesses are never saved; only launches and manual assignments are.
+
+If a window ends up on the wrong card, open the card's **…** menu and use
+**Move to profile** or **Not from this profile**.
 
 Learned assignments are kept per browser PID and window id, so they are reused
 in later sessions.
@@ -309,7 +315,7 @@ requirements in [docs/SPECIFICATION.md](docs/SPECIFICATION.md).
 ## Development and tests
 
 ```bash
-QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q   # 123 tests, no browser needed
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q   # 127 tests, no browser needed
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest --cov=brave_workspace_manager
 ruff check
 ruff format --check

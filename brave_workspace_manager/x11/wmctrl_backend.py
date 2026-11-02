@@ -104,19 +104,8 @@ class WmctrlBackend:
         return result.returncode == 0
 
     def restore(self, window_id: int) -> bool:
-        if not shutil.which("xdotool"):
-            return False
-        try:
-            result = subprocess.run(
-                ["xdotool", "windowmap", "windowraise", str(window_id)],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=False,
-            )
-        except (OSError, subprocess.SubprocessError):
-            return False
-        return result.returncode == 0
+        """wmctrl -a maps, de-iconifies and raises the window."""
+        return self.activate(window_id)
 
     def _change_state(self, window_id: int, action: str) -> bool:
         if not self._binary:

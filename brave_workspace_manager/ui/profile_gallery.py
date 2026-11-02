@@ -156,6 +156,7 @@ class ProfileGallery(QWidget):
     doubleClicked = Signal(str)
     contextRequested = Signal(str, QPoint)
     windowActionRequested = Signal(str, int, str)
+    reassignRequested = Signal(int, str)
     reordered = Signal(list)
     saveProfileRequested = Signal(int, str)
     assignRequested = Signal(int, str)
@@ -196,6 +197,7 @@ class ProfileGallery(QWidget):
                 tile.doubleClicked.connect(self.doubleClicked)
                 tile.contextRequested.connect(self.contextRequested)
                 tile.windowActionRequested.connect(self.windowActionRequested)
+                tile.reassignRequested.connect(self.reassignRequested)
                 tile.show()
             else:
                 tile.update_profile(profile)
@@ -205,6 +207,9 @@ class ProfileGallery(QWidget):
             tile.setParent(None)
             tile.deleteLater()
         self._tiles = nuevos
+        choices = [(profile.id, profile.label) for profile in profiles]
+        for tile in self._tiles:
+            tile.set_profile_choices(choices)
         self.relayout()
 
     def update_profile(self, profile: Profile) -> None:

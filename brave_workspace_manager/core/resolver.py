@@ -2,18 +2,18 @@
 
 Chromium runs every window of every profile of a user-data-dir inside a single
 browser process, so the PID of a window does not identify its profile and no
-standard X11 property reveals it. The match is therefore resolved by combining:
+standard X11 property reveals it. The window title is the title of the active
+page, so it says nothing reliable about the profile (a page may mention any
+profile name). The match is therefore resolved by combining:
 
 * assignments learned in previous runs (persisted),
 * the only open profile when just one is active,
-* the profile name when it appears in the window title,
 * elimination: when a single unassigned window and a single open profile
   without windows remain, they belong together.
 """
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 
 from ..models import MatchMethod, Profile, WindowInfo
@@ -25,13 +25,6 @@ class ResolutionContext:
     windows: list[WindowInfo]
     open_profile_ids: set[str] = field(default_factory=set)
     assignments: dict[tuple[int, int], dict] = field(default_factory=dict)
-
-
-def _matches_word(text: str, needle: str) -> bool:
-    if not needle:
-        return False
-    pattern = re.compile(rf"(?<![\w]){re.escape(needle)}(?![\w])", re.IGNORECASE)
-    return bool(pattern.search(text))
 
 
 class WindowResolver:
@@ -53,7 +46,6 @@ class WindowResolver:
                 assigned[window.window_id] = method
 
         self._apply_single_open_profile(context, assigned)
-        self._apply_title_match(context, assigned)
         self._apply_elimination(context, assigned)
 
         for window in windows:
@@ -78,21 +70,6 @@ class WindowResolver:
             window.method = MatchMethod.SINGLE_PROFILE
             window.confidence = 0.9
             assigned[window.window_id] = MatchMethod.SINGLE_PROFILE
-
-    def _apply_title_match(
-        self, context: ResolutionContext, assigned: dict[int, MatchMethod]
-    ) -> None:
-        for window in context.windows:
-            if window.window_id in assigned or not window.title:
-                continue
-            for profile in context.profiles:
-                candidates = {profile.label, profile.directory_name}
-                if any(_matches_word(window.title, candidate) for candidate in candidates):
-                    window.profile_id = profile.id
-                    window.method = MatchMethod.TITLE
-                    window.confidence = 0.6
-                    assigned[window.window_id] = MatchMethod.TITLE
-                    break
 
     def _apply_elimination(
         self, context: ResolutionContext, assigned: dict[int, MatchMethod]

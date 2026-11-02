@@ -165,5 +165,8 @@
   "tray.next_profile": "Next profile",
   "tray.prev_profile": "Previous profile",
   "tray.refresh": "Refresh",
-  "tray.quit": "Quit"
+  "tray.quit": "Quit",
+  "status.unassigned": "Window removed from the profile.",
+  "card.menu.move_to": "Move to profile",
+  "card.menu.unassign": "Not from this profile"
 }

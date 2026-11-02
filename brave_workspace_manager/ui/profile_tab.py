@@ -32,6 +32,7 @@ class ProfileTab(QFrame):
     contextRequested = Signal(str, QPoint)
     doubleClicked = Signal(str)
     windowActionRequested = Signal(str, int, str)
+    reassignRequested = Signal(int, str)
 
     WIDTH = 168
     HEIGHT = 176
@@ -47,6 +48,7 @@ class ProfileTab(QFrame):
         self._selected = False
         self._profile: Profile = profile
         self._windows: list[WindowInfo] = []
+        self._choices: list[tuple[str, str]] = []
         self._press_pos: QPoint | None = None
         self._dragging = False
 
@@ -145,6 +147,10 @@ class ProfileTab(QFrame):
         self._windows = list(windows)
         self._refresh_texts()
 
+    def set_profile_choices(self, choices: list[tuple[str, str]]) -> None:
+        """Profiles (id, label) a window of this card can be moved to."""
+        self._choices = [item for item in choices if item[0] != self.profile_id]
+
     def set_selected(self, selected: bool) -> None:
         """Marks the card as the active one in the gallery."""
         if selected == self._selected:
@@ -209,7 +215,7 @@ class ProfileTab(QFrame):
             button.setEnabled(ventana is not None)
             button.setVisible(ventana is not None)
         self._more.setEnabled(bool(self._windows))
-        self._more.setVisible(len(self._windows) > 1)
+        self._more.setVisible(bool(self._windows))
         minimized = ventana is not None and ventana.is_minimized
         maximized = ventana is not None and ventana.is_maximized
         self._buttons["minimize"].setIcon(
@@ -259,30 +265,53 @@ class ProfileTab(QFrame):
         ventana = self._primary_window()
         if ventana is None:
             return
+        if action == "minimize" and ventana.is_minimized:
+            action = "restore"
         self.windowActionRequested.emit(self.profile_id, ventana.window_id, action)
 
     def _show_window_menu(self) -> None:
-        """Menu with every window of the profile and its own actions."""
+        """Menu with every window of the profile, its actions and its profile."""
         if not self._windows:
             return
         menu = QMenu(self)
         menu.setTitle(tr("card.menu.windows"))
         for window in self._windows:
-            titulo = window.title or tr("card.no_windows")
-            if window.tab_titles:
-                titulo = f"{titulo} — {window.tabs_text}"
-            submenu = menu.addMenu(titulo)
-            for action in ACTION_ACTIONS:
-                if action == "minimize" and window.is_minimized:
-                    etiqueta = tr("card.action.restore")
-                elif action == "maximize" and window.is_maximized:
-                    etiqueta = tr("card.action.unmaximize")
-                else:
-                    etiqueta = tr(f"card.action.{action}")
-                submenu.addAction(etiqueta).triggered.connect(
-                    lambda _checked=False, w=window, a=action: self._emit_window_action(w, a)
+            if len(self._windows) == 1:
+                target = menu
+            else:
+                title = window.title or tr("card.no_windows")
+                if window.tab_titles:
+                    title = f"{title} — {window.tabs_text}"
+                target = menu.addMenu(title)
+            self._fill_window_menu(target, window)
+        menu.exec(self._more.mapToGlobal(self._more.rect().bottomLeft()))
+
+    def _fill_window_menu(self, menu: QMenu, window: WindowInfo) -> None:
+        for action in ACTION_ACTIONS:
+            if action == "minimize" and window.is_minimized:
+                label = tr("card.action.restore")
+                name = "restore"
+            elif action == "maximize" and window.is_maximized:
+                label = tr("card.action.unmaximize")
+                name = action
+            else:
+                label = tr(f"card.action.{action}")
+                name = action
+            menu.addAction(label).triggered.connect(
+                lambda _checked=False, w=window, a=name: self._emit_window_action(w, a)
+            )
+        menu.addSeparator()
+        move = menu.addMenu(tr("card.menu.move_to"))
+        move.setEnabled(bool(self._choices))
+        for profile_id, label in self._choices:
+            move.addAction(label).triggered.connect(
+                lambda _checked=False, w=window, p=profile_id: self.reassignRequested.emit(
+                    w.window_id, p
                 )
-        menu.exec(self.cursor().pos())
+            )
+        menu.addAction(tr("card.menu.unassign")).triggered.connect(
+            lambda _checked=False, w=window: self.reassignRequested.emit(w.window_id, "")
+        )
 
     def _emit_window_action(self, window: WindowInfo, action: str) -> None:
         self.windowActionRequested.emit(self.profile_id, window.window_id, action)

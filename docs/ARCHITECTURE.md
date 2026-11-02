@@ -99,12 +99,16 @@ sets the method and confidence:
 | 1 | `LEARNED` | 1.0 | The window (id + PID) has an assignment saved in SQLite. |
 | 2 | `MANUAL` | 1.0 | The user assigned it by hand; it is never downgraded. |
 | 3 | `SINGLE_PROFILE` | 0.9 | Only one profile is open: every Brave window belongs to it. |
-| 4 | `TITLE` | 0.6 | The profile name appears as a whole word in the title. |
-| 5 | `ELIMINATION` | 0.5 | Exactly one window is unassigned and exactly one open profile has no windows. |
-| 6 | `NONE` | 0.0 | Cannot be resolved: the window goes to the **Unassigned windows** card. |
+| 4 | `ELIMINATION` | 0.5 | Exactly one window is unassigned and exactly one open profile has no windows. |
+| 5 | `NONE` | 0.0 | Cannot be resolved: the window goes to the **Unassigned windows** card. |
 
-Rule 4 uses a regular expression with word boundaries
-(`(?<![\w])name(?![\w])`) so that `Work` does not match `WorkX`.
+There is no title rule: the window title is the title of the active page, and
+page titles mention profile names often enough to produce wrong matches (for
+example a Teams chat called "Weekly review with work"). `MatchMethod.TITLE` remains in
+the enum only so that old values stored in the database can still be read.
+
+Guesses (`SINGLE_PROFILE`, `ELIMINATION`) are recomputed on every refresh and
+**never saved**; activating a profile does not persist them either.
 
 ### Learning
 
@@ -114,7 +118,11 @@ Rule 4 uses a regular expression with word boundaries
   `learned`. The window stays marked for 20 s (`LAUNCH_LEARNING_SECONDS`).
 - **Manual**: the **Assign to profile…** drop-down of the Unassigned windows
   card, the **Take the active window** entry of a card's context menu, and
-  **Save as new profile** save the assignment with method `manual`.
+  **Save as new profile** save the assignment with method `manual`, and so
+  does **Move to profile** in a card's **…** menu.
+- **Not from this profile** (same menu) deletes the assignment and keeps the
+  window out of the guessing rules until it is assigned by hand, so it lands
+  on the Unassigned windows card.
 
 Assignments are indexed by `(window_id, browser_pid)`, so they reappear when
 the same profile is opened again in a later session.

@@ -191,3 +191,23 @@ def test_the_active_tab_comes_from_the_tree(app) -> None:
     frame = FrameTabs(title="Ventana", titles=["Primera", "Segunda"], active=1)
     assert frame.active_title == "Segunda"
     assert FrameTabs(title="Ventana", titles=["Primera"]).active_title == ""
+
+
+def test_the_minimise_button_restores_a_minimised_window(app) -> None:
+    from brave_workspace_manager.ui.profile_tab import ProfileTab
+
+    perfil = Profile(id="Profile 1", directory_name="Profile 1", is_open=True, window_count=1)
+    tarjeta = ProfileTab(perfil)
+    tarjeta.set_windows([WindowInfo(window_id=5, pid=1, is_minimized=True, is_maximized=True)])
+    recibidas: list[str] = []
+    tarjeta.windowActionRequested.connect(lambda _p, _w, a: recibidas.append(a))
+    tarjeta._buttons["minimize"].click()
+    assert recibidas == ["restore"]
+
+
+def test_the_card_offers_the_other_profiles(app) -> None:
+    from brave_workspace_manager.ui.profile_tab import ProfileTab
+
+    tarjeta = ProfileTab(Profile(id="Default", directory_name="Default"))
+    tarjeta.set_profile_choices([("Default", "Alice"), ("Profile 1", "Work")])
+    assert tarjeta._choices == [("Profile 1", "Work")]

@@ -165,5 +165,8 @@
   "tray.next_profile": "Perfil siguiente",
   "tray.prev_profile": "Perfil anterior",
   "tray.refresh": "Actualizar",
-  "tray.quit": "Salir"
+  "tray.quit": "Salir",
+  "status.unassigned": "Ventana quitada del perfil.",
+  "card.menu.move_to": "Mover al perfil",
+  "card.menu.unassign": "No es de este perfil"
 }

@@ -247,3 +247,24 @@ def test_a_virtual_profile_cannot_be_launched(tmp_path) -> None:
     controller.statusMessage.connect(messages.append)
     assert not controller.launch_profile("virtual-1")
     assert messages and "cannot be opened" in messages[0]
+
+
+def test_clicking_a_card_does_not_save_a_guess(tmp_path) -> None:
+    from brave_workspace_manager.models import MatchMethod
+
+    window = WindowInfo(window_id=9, pid=77, profile_id="Default", method=MatchMethod.ELIMINATION)
+    controller, _ = _action_controller(tmp_path, [window])
+    controller.profiles = [Profile(id="Default", directory_name="Default")]
+    assert controller.activate_profile("Default")
+    assert controller.database.load_assignments() == {}
+
+
+def test_a_window_can_be_moved_and_unassigned(tmp_path) -> None:
+    window = WindowInfo(window_id=9, pid=77, profile_id="Profile 1")
+    controller, _ = _action_controller(tmp_path, [window])
+    assert controller.assign_window(9, "Default")
+    assert controller.database.load_assignments()[(9, 77)]["profile_id"] == "Default"
+    assert controller.unassign_window(9)
+    assert controller.database.load_assignments() == {}
+    assert window.profile_id is None
+    assert (9, 77) in controller._detached

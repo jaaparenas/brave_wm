@@ -22,6 +22,9 @@ ATOMS = (
 )
 
 
+ICONIC_STATE = 3  # ICCCM IconicState, for WM_CHANGE_STATE
+
+
 class X11Backend:
     """Lists and controls windows through the EWMH protocol."""
 
@@ -195,15 +198,16 @@ class X11Backend:
 
     # ------------------------------------------------------------- acciones
 
-    def _send_state(self, window_id: int, state_name: str, remove: bool) -> bool:
+    def _send_root_message(self, window_id: int, message: str, data: list[int]) -> bool:
+        """Sends a client message to the window manager about a window."""
         try:
             d = self._display()
             root = d.screen().root
             window = self._window(window_id)
             event = protocol.event.ClientMessage(
                 window=window,
-                client_type=self._atom("_NET_WM_STATE"),
-                data=(32, [0 if remove else 1, self._atom(state_name), 0, 1, 0]),
+                client_type=self._atom(message),
+                data=(32, [*data, 0, 0, 0, 0, 0][:5]),
             )
             root.send_event(event, event_mask=X.SubstructureRedirectMask | X.SubstructureNotifyMask)
             d.flush()
@@ -211,8 +215,20 @@ class X11Backend:
         except Exception:
             return False
 
+    def _send_state(self, window_id: int, states: tuple[str, ...], remove: bool) -> bool:
+        """Adds or removes up to two EWMH states in a single request."""
+        atoms = [self._atom(name) for name in states] + [0]
+        return self._send_root_message(
+            window_id, "_NET_WM_STATE", [0 if remove else 1, atoms[0], atoms[1], 1]
+        )
+
     def restore(self, window_id: int) -> bool:
-        ok = self._send_state(window_id, "_NET_WM_STATE_HIDDEN", remove=True)
+        """Brings a minimised window back.
+
+        Only the window manager may clear ``_NET_WM_STATE_HIDDEN``; the
+        standard way to de-iconify is to map the window and request
+        ``_NET_ACTIVE_WINDOW``.
+        """
         try:
             window = self._window(window_id)
             if window.get_attributes().map_state == X.IsUnmapped:
@@ -220,39 +236,34 @@ class X11Backend:
             self._display().flush()
         except Exception:
             pass
-        return ok
+        return self._send_root_message(window_id, "_NET_ACTIVE_WINDOW", [2, X.CurrentTime])
 
     def activate(self, window_id: int) -> bool:
-        self.restore(window_id)
-        try:
-            d = self._display()
-            root = d.screen().root
-            window = self._window(window_id)
-            event = protocol.event.ClientMessage(
-                window=window,
-                client_type=self._atom("_NET_ACTIVE_WINDOW"),
-                data=(32, [2, X.CurrentTime, 0, 0, 0]),
-            )
-            root.send_event(event, event_mask=X.SubstructureRedirectMask | X.SubstructureNotifyMask)
-            d.flush()
-            return True
-        except Exception:
-            return False
+        return self.restore(window_id)
 
     def minimize(self, window_id: int) -> bool:
-        return self._send_state(window_id, "_NET_WM_STATE_HIDDEN", remove=False)
+        """Iconifies the window the ICCCM way (WM_CHANGE_STATE, IconicState).
+
+        Window managers such as Muffin ignore requests to add
+        ``_NET_WM_STATE_HIDDEN``, because that state belongs to them.
+        """
+        return self._send_root_message(window_id, "WM_CHANGE_STATE", [ICONIC_STATE])
 
     def maximize(self, window_id: int) -> bool:
-        """Adds the two EWMH states that make a window fill the screen."""
-        vertical = self._send_state(window_id, "_NET_WM_STATE_MAXIMIZED_VERT", remove=False)
-        horizontal = self._send_state(window_id, "_NET_WM_STATE_MAXIMIZED_HORZ", remove=False)
-        return vertical and horizontal
+        """Maximises the window and brings it to the front so the change is visible."""
+        ok = self._send_state(
+            window_id, ("_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ"), False
+        )
+        self.restore(window_id)
+        return ok
 
     def unmaximize(self, window_id: int) -> bool:
-        """Removes the maximised states, keeping the previous size."""
-        vertical = self._send_state(window_id, "_NET_WM_STATE_MAXIMIZED_VERT", remove=True)
-        horizontal = self._send_state(window_id, "_NET_WM_STATE_MAXIMIZED_HORZ", remove=True)
-        return vertical and horizontal
+        """Restores the previous size and brings the window to the front."""
+        ok = self._send_state(
+            window_id, ("_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ"), True
+        )
+        self.restore(window_id)
+        return ok
 
     def close_window(self, window_id: int) -> bool:
         """Asks the window to close the polite way (WM_DELETE_WINDOW)."""

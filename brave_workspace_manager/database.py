@@ -181,6 +181,13 @@ class Database:
                 (window_id, browser_pid, profile_id, title, method, utc_timestamp()),
             )
 
+    def unassign_window(self, window_id: int, browser_pid: int) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "DELETE FROM window_assignments WHERE window_id = ? AND browser_pid = ?",
+                (window_id, browser_pid),
+            )
+
     def load_assignments(self) -> dict[tuple[int, int], dict]:
         with self._lock:
             rows = self._conn.execute("SELECT * FROM window_assignments").fetchall()

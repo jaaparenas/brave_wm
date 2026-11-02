@@ -52,19 +52,14 @@ def test_elimination_assigns_the_last_window(profiles, windows) -> None:
     assert windows[1].method == MatchMethod.ELIMINATION
 
 
-def test_title_match_is_used_when_possible(profiles, windows) -> None:
-    windows[0].title = "Work · Panel de control"
-    context = _context(profiles, windows, open_ids={"Default", "Profile 1"})
-    WindowResolver().resolve(context)
-    assert windows[0].profile_id == "Profile 1"
-    assert windows[0].method == MatchMethod.TITLE
-
-
-def test_title_match_requires_whole_words(profiles, windows) -> None:
-    windows[0].title = "Informe WorkX del trimestre"
+def test_a_page_title_naming_a_profile_is_not_trusted(profiles, windows) -> None:
+    """The title is the active page: a chat about "Work" may live in any profile."""
+    windows[0].title = "(4) Chat | Weekly review with work: Check-in | Microsoft Teams - Brave"
+    windows[1].title = "Work · Panel de control"
     context = _context(profiles, windows, open_ids={"Default", "Profile 1"})
     WindowResolver().resolve(context)
     assert windows[0].profile_id is None
+    assert windows[1].profile_id is None
 
 
 def test_manual_assignment_is_not_downgraded(profiles, windows) -> None:

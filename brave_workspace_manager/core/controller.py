@@ -93,6 +93,7 @@ class AppController(QObject):
         self._leer_pestanas = True
         self._sin_accesibilidad: set[int] = set()
         self._navegador_abierto = False
+        self._detached: dict[tuple[int, int], str | None] = {}
 
     # ------------------------------------------------------------ life cycle
 
@@ -186,6 +187,12 @@ class AppController(QObject):
             assignments=assignments,
         )
         self.resolver.resolve(context)
+        for window in windows:
+            detached = (window.window_id, window.pid) in self._detached
+            if detached and window.method not in (MatchMethod.LEARNED, MatchMethod.MANUAL):
+                window.profile_id = None
+                window.method = MatchMethod.NONE
+                window.confidence = 0.0
 
         for profile in self.profiles:
             profile.window_count = sum(1 for w in windows if w.profile_id == profile.id)
@@ -332,9 +339,8 @@ class AppController(QObject):
             candidates.sort(key=lambda w: (not w.is_active, w.is_minimized))
             target = candidates[0]
             if self.backend.activate(target.window_id):
-                self.database.assign_window(
-                    target.window_id, target.pid, profile_id, target.title, "learned"
-                )
+                # Guesses (single profile, elimination) are not saved here: clicking a
+                # card must not turn a wrong guess into a permanent assignment.
                 self.profileActivated.emit(profile_id)
                 self.statusMessage.emit(tr("status.activated", name=profile.label))
                 self.refresh()
@@ -392,10 +398,24 @@ class AppController(QObject):
         if window is None:
             return False
         self.database.assign_window(window_id, window.pid, profile_id, window.title, "manual")
+        self._detached.pop((window_id, window.pid), None)
         window.profile_id = profile_id
         window.method = MatchMethod.MANUAL
         window.confidence = 1.0
         self.statusMessage.emit(tr("status.assigned"))
+        self.refresh()
+        return True
+
+    def unassign_window(self, window_id: int) -> bool:
+        """Forgets the profile of a window; it goes back to the unassigned card."""
+        window = next((w for w in self.windows if w.window_id == window_id), None)
+        if window is None:
+            return False
+        self.database.unassign_window(window_id, window.pid)
+        self._detached[(window_id, window.pid)] = window.profile_id
+        window.profile_id = None
+        window.method = MatchMethod.NONE
+        self.statusMessage.emit(tr("status.unassigned"))
         self.refresh()
         return True
 

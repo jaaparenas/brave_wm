@@ -179,6 +179,7 @@ class MainWindow(QMainWindow):
         self._gallery.doubleClicked.connect(self.controller.launch_profile)
         self._gallery.contextRequested.connect(self._show_profile_menu)
         self._gallery.windowActionRequested.connect(self._on_window_action)
+        self._gallery.reassignRequested.connect(self._on_reassign)
         self._gallery.reordered.connect(self._on_profiles_reordered)
         self._gallery.saveProfileRequested.connect(self._on_save_window_as_profile)
         self._gallery.assignRequested.connect(self.controller.assign_window)
@@ -328,6 +329,12 @@ class MainWindow(QMainWindow):
 
     def _on_window_action(self, _profile_id: str, window_id: int, action: str) -> None:
         self.controller.window_action(window_id, action)
+
+    def _on_reassign(self, window_id: int, profile_id: str) -> None:
+        if profile_id:
+            self.controller.assign_window(window_id, profile_id)
+        else:
+            self.controller.unassign_window(window_id)
 
     def _on_unassigned_action(self, window_id: int, action: str) -> None:
         self.controller.window_action(window_id, action)

@@ -14,6 +14,8 @@ and the project uses [semantic versioning](https://semver.org/).
 - Closing a window is a polite request (`WM_DELETE_WINDOW` with python-xlib,
   `wmctrl -c` with the fallback backend); processes are never killed.
 - Drag and drop to reorder the profile cards; the order is saved.
+- **Move to profile** and **Not from this profile** in a card's **…** menu, to
+  correct the profile of a window.
 - Custom image per profile, from the administration panel (**Choose image…**
   / **Remove image**) or the card's context menu (**Change image…**). PNG,
   JPG/JPEG, WebP, BMP and GIF are accepted. The file is copied to
@@ -34,7 +36,7 @@ and the project uses [semantic versioning](https://semver.org/).
 - Automatic database migration that adds the `custom_image` and `is_virtual`
   columns to the `profiles` table.
 - Tests for the translation layer, including a check that every catalogue has
-  the same keys. 124 tests in total.
+  the same keys. 127 tests in total.
 
 ### Changed
 
@@ -47,8 +49,22 @@ and the project uses [semantic versioning](https://semver.org/).
   `docs/images/main-window.png`, `docs/images/main-window-es.png` and
   `docs/images/unassigned-card.png`.
 
+### Fixed
+
+- Minimise did nothing on Cinnamon: windows are now iconified with the ICCCM
+  `WM_CHANGE_STATE` message and restored with `_NET_ACTIVE_WINDOW` (window
+  managers ignore client requests for `_NET_WM_STATE_HIDDEN`). The minimise
+  button of an already minimised window now restores it.
+- Maximise / restore sends both states in one request and brings the window
+  to the front, so the change is visible.
+- Windows could be shown on the wrong profile: the window-title rule matched
+  page titles that mention a profile name, and clicking a card saved that
+  guess permanently. The title rule is gone and guesses are no longer saved.
+- Local keyboard shortcuts were registered twice, which made Qt ignore them.
+
 ### Removed
 
+- The window-title matching rule.
 - The **Administrator** toggle button and its `Ctrl+Alt+B` shortcut (the
   administration panel is always visible now).
 - The **Tray** button in the header. The system tray icon remains available as
