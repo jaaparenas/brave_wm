@@ -10,6 +10,7 @@ from PySide6.QtCore import QLockFile
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from ..config import (
+    APP_ID,
     APP_NAME,
     APP_SUMMARY,
     APP_VERSION,
@@ -87,6 +88,7 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
+    app.setDesktopFileName(APP_ID)
     app.setWindowIcon(icons.app_pixmap())
     app.setStyle("Fusion")
     app.setStyleSheet(STYLESHEET)

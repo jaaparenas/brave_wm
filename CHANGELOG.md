@@ -20,6 +20,10 @@ and the project uses [semantic versioning](https://semver.org/).
 - Tab counts for Brave started outside the app: the app briefly turns on the
   `ScreenReaderEnabled` property of the AT-SPI bus so Brave builds its
   accessibility tree without a restart, then restores the property.
+- `install.sh` and `uninstall.sh`: per-user installation without `sudo` in
+  its own virtual environment (`~/.local/lib/brave-workspace-manager`), with
+  the `brave-workspace-manager` command, menu entry, icon and start at login
+  hidden in the tray. Uninstalling keeps the user's data unless `--purge`.
 - The system tray icon is always present. Its menu switches between
   profiles: open ones first with avatar and tab count (the active one marked),
   closed ones under **Other profiles**. A double click opens the window
@@ -46,7 +50,7 @@ and the project uses [semantic versioning](https://semver.org/).
 - Automatic database migration that adds the `custom_image` and `is_virtual`
   columns to the `profiles` table.
 - Tests for the translation layer, including a check that every catalogue has
-  the same keys. 144 tests in total.
+  the same keys. 149 tests in total.
 
 ### Changed
 

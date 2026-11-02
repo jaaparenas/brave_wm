@@ -121,14 +121,42 @@ locally, kept in memory only, and never stored or sent anywhere.
 ```bash
 git clone https://github.com/jaaparenas/brave-workspace-manager.git
 cd brave-workspace-manager
-./setup.sh
+./install.sh
 ```
 
-`setup.sh` creates a virtual environment in `.venv`, installs the
-dependencies and generates the `brave-workspace-manager` launcher in
-`~/.local/bin`.
+`install.sh` installs the app **for your user only, without `sudo`**, and
+starts it:
 
-Manual installation, if you prefer not to use the script:
+| What | Where |
+|---|---|
+| The application, in its own virtual environment | `~/.local/lib/brave-workspace-manager/` |
+| The `brave-workspace-manager` command | `~/.local/bin/` |
+| Menu entry and icon | `~/.local/share/applications/`, `~/.local/share/icons/hicolor/` |
+| Start at login, hidden in the tray | `~/.config/autostart/brave-workspace-manager.desktop` |
+
+The installed copy does not depend on the cloned folder, so you can move or
+delete it afterwards. Run `./install.sh` again to upgrade: it reinstalls the
+code and restarts the running copy. Options: `--no-autostart` (do not start
+at login) and `--no-start` (do not start now). Autostart can also be switched
+on or off later with **Start with the system** in the administration panel.
+
+To remove it:
+
+```bash
+./uninstall.sh            # keeps your data (names, colours, images, settings)
+./uninstall.sh --purge    # also deletes that data
+```
+
+Uninstalling never touches Brave or its profiles.
+
+### For development
+
+```bash
+./setup.sh      # virtual environment in .venv, inside the repository
+./run.sh        # runs the app from the repository
+```
+
+Or by hand:
 
 ```bash
 python3 -m venv .venv
@@ -140,7 +168,7 @@ python3 -m venv .venv
 
 ```bash
 ./run.sh                                             # start the application
-brave-workspace-manager                              # if installed with setup.sh
+brave-workspace-manager                              # if installed with install.sh
 brave-workspace-manager --minimized                  # start hidden in the system tray
 brave-workspace-manager --user-data-dir /other/path  # another Brave data directory
 brave-workspace-manager --language es                # interface language
@@ -327,7 +355,7 @@ requirements in [docs/SPECIFICATION.md](docs/SPECIFICATION.md).
 ## Development and tests
 
 ```bash
-QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q   # 144 tests, no browser needed
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q   # 149 tests, no browser needed
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest --cov=brave_workspace_manager
 ruff check
 ruff format --check

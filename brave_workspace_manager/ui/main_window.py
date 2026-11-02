@@ -228,7 +228,7 @@ class MainWindow(QMainWindow):
             "poll_interval": self.database.get_setting("poll_interval", "2000"),
             "activate_on_click": self.database.get_setting("activate_on_click", "1"),
             "hotkeys_enabled": self.database.get_setting("hotkeys_enabled", "1"),
-            "autostart": self.database.get_setting("autostart", "0"),
+            "autostart": "1" if autostart.is_enabled() else "0",
             "read_tabs": self.database.get_setting("read_tabs", "1"),
         }
         self._activate_on_click = settings["activate_on_click"] == "1"

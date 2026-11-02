@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import shutil
+import sys
 from pathlib import Path
 
 from ..config import APP_ID, APP_NAME, XDG_CONFIG_HOME
@@ -14,8 +16,9 @@ Comment=Native Brave profile manager
 Exec={exec}
 Icon={icon}
 Terminal=false
-Categories=Utility;Network;
+Categories=Utility;
 X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=5
 """
 
 
@@ -28,9 +31,12 @@ def is_enabled() -> bool:
 
 
 def enable(command: str | None = None) -> bool:
+    """Starts the app hidden in the tray when the session begins."""
     path = desktop_file_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    exec_line = command or f"{APP_ID}"
+    exec_line = command or python_command()
+    if "--minimized" not in exec_line:
+        exec_line = f"{exec_line} --minimized"
     path.write_text(
         DESKTOP_ENTRY.format(name=APP_NAME, exec=exec_line, icon=APP_ID),
         encoding="utf-8",
@@ -54,6 +60,7 @@ def python_command() -> str:
     executable = os.environ.get("BRAVE_WORKSPACE_MANAGER_CMD")
     if executable:
         return executable
-    import sys
-
+    launcher = shutil.which(APP_ID)
+    if launcher:
+        return launcher
     return f"{sys.executable} -m brave_workspace_manager"

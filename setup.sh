@@ -1,25 +1,15 @@
 #!/usr/bin/env bash
-# Installs Brave Workspace Manager in a local virtual environment.
+# Development setup: a virtual environment in .venv inside the repository.
+# To install the app for daily use, run ./install.sh instead.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV="$ROOT/.venv"
-BIN_DIR="${HOME}/.local/bin"
 
-usage() {
-    cat <<'EOF'
-Usage: ./setup.sh [--desktop]
-
-  --desktop   Also install the menu entry (.desktop file)
-EOF
-}
-
-INSTALL_DESKTOP=0
 for arg in "$@"; do
     case "$arg" in
-        --desktop) INSTALL_DESKTOP=1 ;;
-        -h|--help) usage; exit 0 ;;
-        *) echo "Unknown option: $arg" >&2; usage; exit 2 ;;
+        -h|--help) echo "Usage: ./setup.sh   (development environment; see ./install.sh)"; exit 0 ;;
+        *) echo "Unknown option: $arg" >&2; exit 2 ;;
     esac
 done
 
@@ -44,24 +34,8 @@ fi
 echo "Installing dependencies"
 "$VENV/bin/python" -m pip install --upgrade pip >/dev/null
 "$VENV/bin/python" -m pip install -r "$ROOT/requirements.txt"
-
-mkdir -p "$BIN_DIR"
-cat > "$BIN_DIR/brave-workspace-manager" <<EOF
-#!/usr/bin/env bash
-exec "$VENV/bin/python" -m brave_workspace_manager "\$@"
-EOF
-chmod +x "$BIN_DIR/brave-workspace-manager"
-echo "Launcher installed in $BIN_DIR/brave-workspace-manager"
-
-if [ "$INSTALL_DESKTOP" = "1" ]; then
-    TARGET="${XDG_CONFIG_HOME:-$HOME/.config}/applications/brave-workspace-manager.desktop"
-    mkdir -p "$(dirname "$TARGET")"
-    sed "s|@PYTHON@|$VENV/bin/python|g" \
-        "$ROOT/packaging/brave-workspace-manager.desktop" > "$TARGET"
-    chmod +x "$TARGET"
-    echo "Menu entry installed in $TARGET"
-fi
+"$VENV/bin/python" -m pip install pytest ruff
 
 echo
-echo "Installation complete. Start the application with:"
+echo "Development environment ready. Run the app with:"
 echo "  $ROOT/run.sh"
