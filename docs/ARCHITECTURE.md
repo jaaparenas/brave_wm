@@ -144,11 +144,27 @@ The flow has three pieces:
 
 Details that shape the design:
 
-- **Chromium only publishes its interface** (tab strip included) when started
-  with `--force-renderer-accessibility`. That is why `core/launcher.py` adds
-  the flag to the profiles the app opens. If the browser was already running,
-  the flag has no effect: `processes.accesibilidad_activada()` detects it and
-  the interface explains that only the active tab is visible.
+- **Chromium only publishes its interface** (tab strip included) when an
+  assistive technology is present: either it was started with
+  `--force-renderer-accessibility` (which `core/launcher.py` adds to the
+  profiles the app opens) or the `ScreenReaderEnabled` property of the AT-SPI
+  bus (`org.a11y.Bus /org/a11y/bus org.a11y.Status`) turns true while it runs.
+- **Waking up a running Brave** (`a11y_switch.py`): every Brave window has at
+  least one tab, so a matched frame with zero tabs means the tree is off. The
+  controller then sets `ScreenReaderEnabled` to true through `busctl`, waits
+  12 s (`A11Y_PULSE_SECONDS`), restores the previous value and reads again.
+  Brave keeps its tree after the property goes back. It is tried at most every
+  5 minutes (`A11Y_RETRY_SECONDS`); if Brave still hides its tabs, the window
+  shows a notice. GNOME settings are not modified and no screen reader starts.
+  The property is restored on exit too.
+- **The profile name is in the frame name**: when several profiles exist,
+  Brave appends an en dash and the profile name to the accessible name of
+  each window (`Dashboard - Brave – Alice Doe`), even while the tree is
+  off. `FrameTabs.profile_name` extracts it, and the controller assigns the
+  window to the profile with that Brave name (`MatchMethod.ACCESSIBILITY`),
+  overriding learned assignments and guesses but never a manual assignment.
+  Frames are matched to X11 windows by title, by title prefix (Brave may insert
+  notices such as "High memory usage - 885 MB"), and by geometry.
 - **The tab strip** appears as a `page tab list` with one `page tab` per tab;
   the one in the foreground has the `selected` state. Chromium also leaves an
   empty, hidden strip, which is discarded.

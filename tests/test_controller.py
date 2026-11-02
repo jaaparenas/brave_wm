@@ -77,22 +77,22 @@ def test_ignores_its_own_window(tmp_path) -> None:
 
 def test_warns_when_brave_hides_the_tabs(tmp_path) -> None:
     controller = _controller(tmp_path, [])
-    controller._navegador_abierto = True
-    controller._sin_accesibilidad = {7}
+    controller._needs_a11y = True
+    controller._a11y_failed = True
     assert "accessibility" in controller.tabs_status.lower()
 
 
 def test_no_warning_when_the_browser_exposes_the_tabs(tmp_path) -> None:
     controller = _controller(tmp_path, [])
-    controller._navegador_abierto = True
-    controller._sin_accesibilidad = set()
+    controller._needs_a11y = False
+    controller._a11y_failed = False
     assert controller.tabs_status == ""
 
 
 def test_disabled_tab_reading_shows_no_warning(tmp_path) -> None:
     controller = _controller(tmp_path, [])
-    controller._navegador_abierto = True
-    controller._sin_accesibilidad = {7}
+    controller._needs_a11y = True
+    controller._a11y_failed = True
     controller.set_read_tabs(False)
     assert controller.tabs_status == ""
 
@@ -268,3 +268,110 @@ def test_a_window_can_be_moved_and_unassigned(tmp_path) -> None:
     assert controller.database.load_assignments() == {}
     assert window.profile_id is None
     assert (9, 77) in controller._detached
+
+
+def test_the_accessibility_tree_corrects_a_wrong_learned_window(tmp_path) -> None:
+    from brave_workspace_manager.models import MatchMethod
+
+    window = WindowInfo(
+        window_id=9,
+        pid=77,
+        title="Dashboard - Brave",
+        profile_id="Profile 1",
+        method=MatchMethod.LEARNED,
+    )
+    controller, _ = _action_controller(tmp_path, [window])
+    controller.profiles = [
+        Profile(id="Default", directory_name="Default", brave_display_name="Alice Doe"),
+        Profile(id="Profile 1", directory_name="Profile 1", brave_display_name="Work"),
+    ]
+    frame = FrameTabs(title="Dashboard - Brave – Alice Doe", titles=["A", "B"])
+    controller._aplicar_pestanas([window], [frame])
+    assert window.profile_id == "Default"
+    assert window.method == MatchMethod.ACCESSIBILITY
+    assert controller.database.load_assignments()[(9, 77)]["profile_id"] == "Default"
+    assert controller.profiles[0].window_count == 1
+    assert controller.profiles[0].tab_count == 2
+    assert controller.profiles[1].window_count == 0
+
+
+def test_a_manual_assignment_beats_the_accessibility_tree(tmp_path) -> None:
+    from brave_workspace_manager.models import MatchMethod
+
+    window = WindowInfo(
+        window_id=9, pid=77, title="X - Brave", profile_id="Profile 1", method=MatchMethod.MANUAL
+    )
+    controller, _ = _action_controller(tmp_path, [window])
+    controller.profiles = [
+        Profile(id="Default", directory_name="Default", brave_display_name="Alice Doe"),
+        Profile(id="Profile 1", directory_name="Profile 1", brave_display_name="Work"),
+    ]
+    controller._aplicar_pestanas([window], [FrameTabs(title="X - Brave – Alice Doe")])
+    assert window.profile_id == "Profile 1"
+
+
+class _FakeSwitch:
+    available = True
+
+    def __init__(self, value: bool = False) -> None:
+        self.value = value
+        self.writes: list[bool] = []
+
+    def get(self) -> bool:
+        return self.value
+
+    def set(self, enabled: bool) -> bool:
+        self.writes.append(enabled)
+        self.value = enabled
+        return True
+
+
+def _pulse_controller(tmp_path, switch: _FakeSwitch) -> AppController:
+    window = WindowInfo(window_id=9, pid=77, title="Dashboard - Brave")
+    controller = AppController(
+        Database(tmp_path / "workspace.db"),
+        _ActionBackend([window]),
+        _FakeLauncher(),
+        user_data_dir=tmp_path / "missing-brave",
+        a11y_switch=switch,
+    )
+    controller.refresh = lambda: None
+    controller._programar_lectura_pestanas = lambda: None
+    controller.windows = [window]
+    return controller
+
+
+def test_a_window_without_tabs_wakes_up_brave_accessibility(tmp_path) -> None:
+    switch = _FakeSwitch(False)
+    controller = _pulse_controller(tmp_path, switch)
+    controller._on_tabs_read([FrameTabs(title="Dashboard - Brave \u2013 Alice")])
+    assert switch.writes == [True]
+    controller._finish_a11y_pulse()
+    assert switch.writes == [True, False]
+    assert controller.tabs_status == ""
+
+
+def test_the_pulse_is_not_repeated_and_then_warns(tmp_path) -> None:
+    switch = _FakeSwitch(False)
+    controller = _pulse_controller(tmp_path, switch)
+    empty = [FrameTabs(title="Dashboard - Brave")]
+    controller._on_tabs_read(empty)
+    controller._finish_a11y_pulse()
+    controller._on_tabs_read(empty)
+    assert switch.writes == [True, False]
+    assert "accessibility" in controller.tabs_status.lower()
+
+
+def test_no_pulse_when_the_tabs_are_visible(tmp_path) -> None:
+    switch = _FakeSwitch(False)
+    controller = _pulse_controller(tmp_path, switch)
+    controller._on_tabs_read([FrameTabs(title="Dashboard - Brave", titles=["A"])])
+    assert switch.writes == []
+
+
+def test_stopping_restores_the_bus_property(tmp_path) -> None:
+    switch = _FakeSwitch(False)
+    controller = _pulse_controller(tmp_path, switch)
+    controller._on_tabs_read([FrameTabs(title="Dashboard - Brave")])
+    controller.stop()
+    assert switch.value is False

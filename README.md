@@ -192,6 +192,7 @@ guess: it applies a cascade of rules, from most to least reliable, and
 
 | Order | Rule | Confidence | How it works |
 |---|---|---|---|
+| 0 | Accessibility tree | 100 % | Brave publishes the profile name of each window (see [How open tabs are counted](#how-open-tabs-are-counted)). It beats every rule below except a manual assignment. |
 | 1 | Learned assignment | 100 % | Stored in the local database when the app launches a profile or when the user assigns a window by hand. |
 | 2 | Single open profile | 90 % | If only one profile is open, every Brave window belongs to it. |
 | 3 | Elimination | 50 % | If exactly one window is unassigned and exactly one open profile has no windows, they belong together. |
@@ -221,11 +222,17 @@ The only local route that does not touch the browser's data is the
 - The app runs `brave_workspace_manager/a11y_helper.py` in a separate process
   (the virtual environment may not have PyGObject) and receives JSON with the
   windows and their tabs.
-- Chromium only publishes its interface, including the tab strip, when it is
-  started with `--force-renderer-accessibility`. That is why the launcher adds
-  this flag to the profiles the app opens. If Brave was already running, close
-  it completely and open a profile from the app; until then the window warns
-  that only the active tab is visible.
+- Chromium only publishes its interface, including the tab strip, when an
+  assistive technology is present. The launcher adds
+  `--force-renderer-accessibility` to the profiles the app opens. When Brave
+  was started some other way, the app notices windows without tabs and turns
+  on the `ScreenReaderEnabled` property of the accessibility bus for about
+  12 seconds: Brave reacts by building its tree, keeps it afterwards, and the
+  property goes back to its previous value. No GNOME setting changes and no
+  screen reader starts. This is tried at most once every 5 minutes.
+- When several profiles exist, Brave adds the **profile name** to the
+  accessible name of each window (`Dashboard - Brave – Alice Doe`). The
+  app uses it to know, with certainty, which profile owns each window.
 - Each card shows the number of tabs; its tooltip lists the titles.
 - The summary counts the open tabs of all profiles.
 
@@ -315,7 +322,7 @@ requirements in [docs/SPECIFICATION.md](docs/SPECIFICATION.md).
 ## Development and tests
 
 ```bash
-QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q   # 127 tests, no browser needed
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q   # 136 tests, no browser needed
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest --cov=brave_workspace_manager
 ruff check
 ruff format --check

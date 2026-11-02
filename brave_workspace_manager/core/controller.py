@@ -11,6 +11,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QThread, QTimer, Signal
 
 from .. import discovery, processes
+from ..a11y_switch import A11ySwitch
 from ..config import brave_user_data_dir, data_dir
 from ..database import Database
 from ..i18n import tr
@@ -35,6 +36,8 @@ PROFILE_PALETTE = (
 
 LAUNCH_LEARNING_SECONDS = 20.0
 TAB_INTERVAL_SECONDS = 10.0
+A11Y_PULSE_SECONDS = 12.0
+A11Y_RETRY_SECONDS = 300.0
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif")
 
 
@@ -71,6 +74,7 @@ class AppController(QObject):
         launcher: ProfileLauncher,
         user_data_dir: Path | None = None,
         tab_reader: object | None = None,
+        a11y_switch: object | None = None,
     ) -> None:
         super().__init__()
         self.database = database
@@ -87,13 +91,18 @@ class AppController(QObject):
         self._launch_deadline = 0.0
         self._baseline_window_ids: set[int] = set()
         self.tab_reader = tab_reader or TabReader()
+        self.a11y_switch = a11y_switch or A11ySwitch()
+        self._needs_a11y = False
+        self._a11y_failed = False
+        self._last_pulse = -A11Y_RETRY_SECONDS
+        self._pulse_restore: bool | None = None
         self._frames: list[FrameTabs] = []
         self._tab_thread: TabReaderThread | None = None
         self._last_tab_read = 0.0
         self._leer_pestanas = True
-        self._sin_accesibilidad: set[int] = set()
         self._navegador_abierto = False
         self._detached: dict[tuple[int, int], str | None] = {}
+        self._open_dirs: set[str] = set()
 
     # ------------------------------------------------------------ life cycle
 
@@ -111,6 +120,7 @@ class AppController(QObject):
         if self._tab_thread is not None:
             self._tab_thread.wait(3000)
             self._tab_thread = None
+        self._end_a11y_pulse()
 
     def set_poll_interval(self, milliseconds: int) -> None:
         self.poll_interval_ms = max(500, int(milliseconds))
@@ -141,7 +151,7 @@ class AppController(QObject):
         motivo = self.tab_reader.motivo
         if motivo:
             return tr("tabs.unreadable", reason=motivo)
-        if self._sin_accesibilidad:
+        if self._a11y_failed and self._needs_a11y:
             return tr("tabs.no_accessibility")
         return ""
 
@@ -169,14 +179,10 @@ class AppController(QObject):
         process_list = processes.scan_brave_processes()
         browser_pids = [p.pid for p in processes.browser_processes(process_list)]
         self._navegador_abierto = bool(browser_pids)
-        accesibilidad = processes.accesibilidad_por_pid(process_list)
         known_dirs = {p.directory_name for p in self.profiles}
         open_dirs = processes.profile_dirs_in_use(browser_pids, self.user_data_dir, known_dirs)
 
         windows = self._brave_windows(process_list)
-        self._sin_accesibilidad = {
-            w.window_id for w in windows if w.pid in accesibilidad and not accesibilidad[w.pid]
-        }
         self._learn_from_launch(windows)
 
         assignments = self.database.load_assignments()
@@ -194,10 +200,7 @@ class AppController(QObject):
                 window.method = MatchMethod.NONE
                 window.confidence = 0.0
 
-        for profile in self.profiles:
-            profile.window_count = sum(1 for w in windows if w.profile_id == profile.id)
-            profile.is_open = profile.id in open_dirs or profile.window_count > 0
-
+        self._open_dirs = open_dirs
         self.windows = windows
         self._aplicar_pestanas(windows, self._frames)
         self._programar_lectura_pestanas()
@@ -209,13 +212,47 @@ class AppController(QObject):
     def _aplicar_pestanas(self, windows: list[WindowInfo], frames: list[FrameTabs]) -> None:
         """Shares the tabs read between the windows and the profiles."""
         pares = emparejar(frames, windows) if frames else {}
+        # Every Brave window has at least one tab: a frame without tabs means
+        # that Brave is not publishing its interface tree.
+        self._needs_a11y = any(frame.count == 0 for frame in pares.values())
         for window in windows:
             frame = pares.get(window.window_id)
             window.tab_count = frame.count if frame else 0
             window.tab_titles = list(frame.titles) if frame else []
             window.active_tab = frame.active if frame else -1
+            if frame is not None:
+                self._perfil_desde_marco(window, frame)
         for profile in self.profiles:
             profile.tab_count = sum(w.tab_count for w in windows if w.profile_id == profile.id)
+            profile.window_count = sum(1 for w in windows if w.profile_id == profile.id)
+            profile.is_open = profile.id in self._open_dirs or profile.window_count > 0
+
+    def _perfil_desde_marco(self, window: WindowInfo, frame: FrameTabs) -> None:
+        """Uses the profile name Brave publishes in the accessibility tree.
+
+        It is the browser's own statement, so it beats learned assignments and
+        guesses; only a manual assignment by the user is kept.
+        """
+        name = frame.profile_name.casefold()
+        if not name or window.method == MatchMethod.MANUAL:
+            return
+        matches = [
+            profile
+            for profile in self.profiles
+            if not profile.is_virtual and (profile.brave_display_name or "").casefold() == name
+        ]
+        if len(matches) != 1:
+            return
+        profile = matches[0]
+        stored = window.method in (MatchMethod.LEARNED, MatchMethod.ACCESSIBILITY)
+        if window.profile_id != profile.id or not stored:
+            self.database.assign_window(
+                window.window_id, window.pid, profile.id, window.title, "learned"
+            )
+        self._detached.pop((window.window_id, window.pid), None)
+        window.profile_id = profile.id
+        window.method = MatchMethod.ACCESSIBILITY
+        window.confidence = 1.0
 
     def _programar_lectura_pestanas(self) -> None:
         if not self._leer_pestanas:
@@ -234,8 +271,41 @@ class AppController(QObject):
     def _on_tabs_read(self, frames: list) -> None:
         self._frames = frames
         self._aplicar_pestanas(self.windows, frames)
+        if self._leer_pestanas and self._needs_a11y:
+            self._start_a11y_pulse()
+        elif not self._needs_a11y:
+            self._a11y_failed = False
         self.profilesChanged.emit()
         self.windowsChanged.emit()
+
+    def _start_a11y_pulse(self) -> None:
+        """Asks Brave to build its accessibility tree, at most every few minutes."""
+        if self._pulse_restore is not None:
+            return
+        now = time.monotonic()
+        if now - self._last_pulse < A11Y_RETRY_SECONDS:
+            # A pulse already ran and Brave still hides its tabs.
+            self._a11y_failed = True
+            return
+        self._last_pulse = now
+        previous = self.a11y_switch.get() if self.a11y_switch.available else None
+        if previous is None or previous or not self.a11y_switch.set(True):
+            self._a11y_failed = True
+            return
+        self._pulse_restore = previous
+        QTimer.singleShot(int(A11Y_PULSE_SECONDS * 1000), self._finish_a11y_pulse)
+
+    def _finish_a11y_pulse(self) -> None:
+        self._end_a11y_pulse()
+        self._last_tab_read = 0.0
+        self._programar_lectura_pestanas()
+
+    def _end_a11y_pulse(self) -> None:
+        """Restores the bus property; Brave keeps its tree once it is built."""
+        if self._pulse_restore is None:
+            return
+        self.a11y_switch.set(self._pulse_restore)
+        self._pulse_restore = None
 
     def _merge_profiles(self, found: list[discovery.DiscoveredProfile]) -> list[Profile]:
         stored = self.database.load_profiles()

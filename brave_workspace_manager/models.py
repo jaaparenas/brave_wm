@@ -11,6 +11,7 @@ from .i18n import tr
 class MatchMethod(str, Enum):
     """How the owning profile of a window was determined."""
 
+    ACCESSIBILITY = "accessibility"
     LEARNED = "learned"
     MANUAL = "manual"
     SINGLE_PROFILE = "single-profile"

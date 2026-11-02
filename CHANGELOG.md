@@ -14,6 +14,12 @@ and the project uses [semantic versioning](https://semver.org/).
 - Closing a window is a polite request (`WM_DELETE_WINDOW` with python-xlib,
   `wmctrl -c` with the fallback backend); processes are never killed.
 - Drag and drop to reorder the profile cards; the order is saved.
+- Each window's profile is read from the accessibility tree, where Brave
+  publishes the profile name next to the window title. It corrects wrong
+  learned assignments automatically; manual assignments are respected.
+- Tab counts for Brave started outside the app: the app briefly turns on the
+  `ScreenReaderEnabled` property of the AT-SPI bus so Brave builds its
+  accessibility tree without a restart, then restores the property.
 - **Move to profile** and **Not from this profile** in a card's **…** menu, to
   correct the profile of a window.
 - Custom image per profile, from the administration panel (**Choose image…**
@@ -36,7 +42,7 @@ and the project uses [semantic versioning](https://semver.org/).
 - Automatic database migration that adds the `custom_image` and `is_virtual`
   columns to the `profiles` table.
 - Tests for the translation layer, including a check that every catalogue has
-  the same keys. 127 tests in total.
+  the same keys. 136 tests in total.
 
 ### Changed
 

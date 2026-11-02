@@ -211,3 +211,31 @@ def test_the_card_offers_the_other_profiles(app) -> None:
     tarjeta = ProfileTab(Profile(id="Default", directory_name="Default"))
     tarjeta.set_profile_choices([("Default", "Alice"), ("Profile 1", "Work")])
     assert tarjeta._choices == [("Profile 1", "Work")]
+
+
+# ------------------------------------------------- profile from the a11y tree
+
+
+def test_the_frame_reveals_its_profile() -> None:
+    frame = FrameTabs(title="Dashboard - Brave – Alice Doe")
+    assert frame.profile_name == "Alice Doe"
+    assert frame.window_title == "Dashboard - Brave"
+
+
+def test_an_en_dash_inside_the_page_title_is_not_a_profile() -> None:
+    frame = FrameTabs(title="News – Today - Brave")
+    assert frame.profile_name == ""
+    assert frame.window_title == "News – Today - Brave"
+
+
+def test_frames_with_a_profile_suffix_match_their_window() -> None:
+    frames = [
+        FrameTabs(title="Dashboard - Brave – Alice Doe"),
+        FrameTabs(
+            title="(4) Chat | Teams - High memory usage - 885 MB - Brave – Work",
+        ),
+    ]
+    ventanas = [_ventana(1, "(4) Chat | Teams - Brave"), _ventana(2, "Dashboard - Brave")]
+    resultado = emparejar(frames, ventanas)
+    assert resultado[2].profile_name == "Alice Doe"
+    assert resultado[1].profile_name == "Work"

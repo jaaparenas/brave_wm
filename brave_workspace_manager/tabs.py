@@ -24,6 +24,10 @@ HELPER_NAME = "a11y_helper.py"
 TIMEOUT_SEGUNDOS = 6.0
 REINTENTO_SEGUNDOS = 300.0
 UMBRAL_SOLAPE = 0.4
+# When several profiles exist, Brave appends an en dash and the profile name to the
+# accessible name of every window, right after the "- Brave" application suffix.
+PROFILE_SEPARATOR = " \u2013 "
+APP_SUFFIX = "Brave"
 
 
 @dataclass(slots=True)
@@ -38,6 +42,21 @@ class FrameTabs:
     @property
     def count(self) -> int:
         return len(self.titles)
+
+    @property
+    def profile_name(self) -> str:
+        """Name of the Brave profile that owns the window, when Brave shows it."""
+        head, separator, tail = self.title.rpartition(PROFILE_SEPARATOR)
+        if not separator or not head.rstrip().endswith(APP_SUFFIX):
+            return ""
+        return tail.strip()
+
+    @property
+    def window_title(self) -> str:
+        """The title as X11 sees it, without the profile name."""
+        if self.profile_name:
+            return self.title.rpartition(PROFILE_SEPARATOR)[0]
+        return self.title
 
     @property
     def active_title(self) -> str:
@@ -185,7 +204,7 @@ def emparejar(frames: list[FrameTabs], windows: list[WindowInfo]) -> dict[int, F
     disponibles = list(windows)
 
     for frame in frames:
-        clave = normalizar(frame.title)
+        clave = normalizar(frame.window_title)
         if not clave:
             continue
         candidatos = [w for w in disponibles if normalizar(w.title) == clave]
@@ -194,6 +213,20 @@ def emparejar(frames: list[FrameTabs], windows: list[WindowInfo]) -> dict[int, F
             resultado[ventana.window_id] = frame
             emparejados.add(id(frame))
             disponibles.remove(ventana)
+
+    # Brave may insert notices before the suffix ("- High memory usage - 885 MB"),
+    # so the start of the title is compared too.
+    for frame in frames:
+        if id(frame) in emparejados:
+            continue
+        clave = normalizar(frame.window_title)
+        candidatos = [
+            w for w in disponibles if (base := _sin_sufijo(w.title)) and clave.startswith(base)
+        ]
+        if len(candidatos) == 1:
+            resultado[candidatos[0].window_id] = frame
+            emparejados.add(id(frame))
+            disponibles.remove(candidatos[0])
 
     for frame in frames:
         if id(frame) in emparejados or frame.geometry is None:
@@ -218,6 +251,15 @@ def emparejar(frames: list[FrameTabs], windows: list[WindowInfo]) -> dict[int, F
             resultado[disponibles[0].window_id] = pendientes[0]
 
     return resultado
+
+
+def _sin_sufijo(titulo: str) -> str:
+    """Normalised X11 title without the trailing "- Brave"."""
+    clave = normalizar(titulo)
+    suffix = " - " + APP_SUFFIX.casefold()
+    if clave.endswith(suffix):
+        clave = clave[: -len(suffix)]
+    return clave if len(clave) >= 3 else ""
 
 
 def _coinciden(frame: FrameTabs, ventana: WindowInfo) -> bool:

@@ -72,5 +72,5 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["N802", "E402"]
+"tests/*" = ["N802", "E402", "RUF001"]  # Brave titles use an en dash
 "tools/*" = ["E402"]
