@@ -1,1 +1,1 @@
-"""Logica de aplicacion: descubrimiento, asociacion y control de perfiles."""
+"""Application logic: discovery, window matching and profile control."""

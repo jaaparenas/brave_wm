@@ -1,4 +1,4 @@
-"""Icono en la bandeja del sistema."""
+"""System tray icon."""
 
 from __future__ import annotations
 
@@ -6,12 +6,13 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
+from ..i18n import tr
 from ..models import Profile
 from . import icons
 
 
 class TrayIcon(QSystemTrayIcon):
-    """Acceso rapido a los perfiles desde la bandeja."""
+    """Quick access to the profiles from the system tray."""
 
     activateProfileRequested = Signal(str)
     nextProfileRequested = Signal()
@@ -32,14 +33,14 @@ class TrayIcon(QSystemTrayIcon):
 
     def _build_menu(self) -> None:
         self._menu.clear()
-        show = QAction("Mostrar / ocultar la ventana", self._menu)
+        show = QAction(tr("tray.toggle_window"), self._menu)
         show.triggered.connect(self.toggleWindowRequested.emit)
         self._menu.addAction(show)
 
         self._menu.addSeparator()
         self._profile_actions = []
         for index in range(9):
-            action = QAction(f"Perfil {index + 1}", self._menu)
+            action = QAction(f"{index + 1}", self._menu)
             action.triggered.connect(
                 lambda _checked=False, position=index: self._activate_position(position)
             )
@@ -47,21 +48,26 @@ class TrayIcon(QSystemTrayIcon):
             self._profile_actions.append(action)
 
         self._menu.addSeparator()
-        next_action = QAction("Perfil siguiente", self._menu)
+        next_action = QAction(tr("tray.next_profile"), self._menu)
         next_action.triggered.connect(self.nextProfileRequested.emit)
         self._menu.addAction(next_action)
-        previous_action = QAction("Perfil anterior", self._menu)
+        previous_action = QAction(tr("tray.prev_profile"), self._menu)
         previous_action.triggered.connect(self.prevProfileRequested.emit)
         self._menu.addAction(previous_action)
 
         self._menu.addSeparator()
-        refresh = QAction("Actualizar", self._menu)
+        refresh = QAction(tr("tray.refresh"), self._menu)
         refresh.triggered.connect(self.refreshRequested.emit)
         self._menu.addAction(refresh)
 
-        quit_action = QAction("Salir", self._menu)
+        quit_action = QAction(tr("tray.quit"), self._menu)
         quit_action.triggered.connect(self.quitRequested.emit)
         self._menu.addAction(quit_action)
+
+    def retranslate(self) -> None:
+        """Rebuilds the texts of the tray menu in the active language."""
+        self._build_menu()
+        self.set_profiles(self._profiles)
 
     def set_profiles(self, profiles: list[Profile]) -> None:
         self._profiles = profiles

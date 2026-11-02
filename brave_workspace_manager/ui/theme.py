@@ -1,4 +1,4 @@
-"""Tema visual: paleta oscura y hoja de estilos de la aplicacion."""
+"""Visual theme: dark palette and stylesheet of the application."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Interfaz comun de los backends de ventanas."""
+"""Common interface of the window backends."""
 
 from __future__ import annotations
 
@@ -21,11 +21,17 @@ class WindowBackend(Protocol):
 
     def restore(self, window_id: int) -> bool: ...
 
+    def maximize(self, window_id: int) -> bool: ...
+
+    def unmaximize(self, window_id: int) -> bool: ...
+
+    def close_window(self, window_id: int) -> bool: ...
+
     def active_window(self) -> int | None: ...
 
 
 class NullBackend:
-    """Usado cuando no hay soporte de gestion de ventanas (Wayland, sin X11)."""
+    """Used when there is no window management support (Wayland, no X11)."""
 
     name = "none"
 
@@ -42,6 +48,15 @@ class NullBackend:
         return False
 
     def restore(self, window_id: int) -> bool:
+        return False
+
+    def maximize(self, window_id: int) -> bool:
+        return False
+
+    def unmaximize(self, window_id: int) -> bool:
+        return False
+
+    def close_window(self, window_id: int) -> bool:
         return False
 
     def active_window(self) -> int | None:

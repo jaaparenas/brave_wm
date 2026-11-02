@@ -1,4 +1,4 @@
-"""Apertura de perfiles nativos de Brave sin crear instancias conflictivas."""
+"""Opens native Brave profiles without creating conflicting instances."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ from pathlib import Path
 
 PROFILE_MANAGER_URL = "brave://settings/manageProfile"
 
-# Chromium solo publica su interfaz (barra de pestanas incluida) por AT-SPI si
-# el navegador se abre con el modo de accesibilidad activado.
+# Chromium only publishes its interface (tab strip included) through AT-SPI
+# when the browser is started with accessibility mode enabled.
 FLAG_ACCESIBILIDAD = "--force-renderer-accessibility"
 
 
 class ProfileLauncher:
-    """Invoca el ejecutable de Brave con el directorio de perfil nativo."""
+    """Runs the Brave executable with the native profile directory."""
 
     def __init__(self, binary: str | None, user_data_dir: Path, leer_pestanas: bool = True) -> None:
         self.binary = binary
@@ -42,11 +42,11 @@ class ProfileLauncher:
         return True
 
     def launch(self, directory_name: str) -> bool:
-        """Abre (o trae al frente) el perfil indicado usando su directorio nativo."""
+        """Opens (or raises) the given profile using its native directory."""
         return self._spawn([f"--profile-directory={directory_name}"])
 
     def open_profile_manager(self) -> bool:
-        """Abre el gestor de perfiles de Brave; no se escriben bases de datos ajenas."""
+        """Opens Brave's profile manager; no foreign database is ever written."""
         return self._spawn([PROFILE_MANAGER_URL])
 
     def open_url(self, url: str) -> bool:

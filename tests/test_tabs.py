@@ -1,4 +1,4 @@
-"""Pruebas de la lectura de pestanas y su emparejamiento con las ventanas."""
+"""Tests of the tab reading and its matching with the windows."""
 
 from __future__ import annotations
 
@@ -25,10 +25,10 @@ def _ventana(window_id: int, title: str, **extra) -> WindowInfo:
     return WindowInfo(window_id=window_id, pid=100, title=title, **extra)
 
 
-# ------------------------------------------------------------- emparejamiento
+# ------------------------------------------------------------- matching
 
 
-def test_empareja_por_titulo_exacto() -> None:
+def test_matches_by_exact_title() -> None:
     frames = [FrameTabs(title="Documentacion", titles=["A", "B"])]
     ventanas = [_ventana(1, "Otra"), _ventana(2, "Documentacion")]
     resultado = emparejar(frames, ventanas)
@@ -36,13 +36,13 @@ def test_empareja_por_titulo_exacto() -> None:
     assert resultado[2].titles == ["A", "B"]
 
 
-def test_empareja_por_titulo_sin_distinguir_mayusculas() -> None:
+def test_matches_by_title_ignoring_case() -> None:
     frames = [FrameTabs(title="  informacion   importante ", titles=["A"])]
     ventanas = [_ventana(1, "Informacion Importante")]
     assert list(emparejar(frames, ventanas)) == [1]
 
 
-def test_empareja_por_geometria_cuando_el_titulo_no_coincide() -> None:
+def test_matches_by_geometry_when_the_title_differs() -> None:
     frames = [FrameTabs(title="brave", titles=["A", "B", "C"], geometry=(100, 200, 800, 600))]
     ventanas = [_ventana(1, "Sin relacion", x=90, y=190, width=820, height=620)]
     resultado = emparejar(frames, ventanas)
@@ -50,19 +50,19 @@ def test_empareja_por_geometria_cuando_el_titulo_no_coincide() -> None:
     assert resultado[1].count == 3
 
 
-def test_no_empareja_si_el_solape_es_insuficiente() -> None:
+def test_no_match_when_the_overlap_is_too_small() -> None:
     frames = [FrameTabs(title="brave", titles=["A"], geometry=(0, 0, 100, 100))]
     ventanas = [_ventana(1, "Sin relacion", x=900, y=900, width=100, height=100)]
     assert emparejar(frames, ventanas) == {}
 
 
-def test_una_sola_ventana_se_empareja_con_el_unico_frame() -> None:
+def test_a_single_window_matches_the_only_frame() -> None:
     frames = [FrameTabs(title="brave", titles=["A"])]
     ventanas = [_ventana(7, "Cualquier cosa")]
     assert list(emparejar(frames, ventanas)) == [7]
 
 
-def test_una_ventana_no_recibe_dos_frames() -> None:
+def test_a_window_never_gets_two_frames() -> None:
     frames = [
         FrameTabs(title="Igual", titles=["A"], geometry=(0, 0, 100, 100)),
         FrameTabs(title="Igual", titles=["B"], geometry=(0, 0, 100, 100)),
@@ -71,14 +71,14 @@ def test_una_ventana_no_recibe_dos_frames() -> None:
     assert len(emparejar(frames, ventanas)) == 1
 
 
-def test_normalizar_y_solape() -> None:
+def test_normalise_and_overlap() -> None:
     assert normalizar("  Hola   mundo ") == "hola mundo"
     assert solape((0, 0, 100, 100), (0, 0, 100, 100)) == 1.0
     assert solape((0, 0, 10, 10), (100, 100, 10, 10)) == 0.0
     assert 0 < solape((0, 0, 100, 100), (50, 0, 100, 100)) < 1
 
 
-# ------------------------------------------------------------------- lector
+# ------------------------------------------------------------------- reader
 
 
 def _ayudante(tmp_path: Path, contenido: str) -> Path:
@@ -87,7 +87,7 @@ def _ayudante(tmp_path: Path, contenido: str) -> Path:
     return ruta
 
 
-def test_el_lector_interpreta_el_json(tmp_path: Path) -> None:
+def test_the_reader_parses_the_json(tmp_path: Path) -> None:
     ruta = _ayudante(
         tmp_path,
         """
@@ -106,7 +106,7 @@ def test_el_lector_interpreta_el_json(tmp_path: Path) -> None:
     assert frames[0].count == 2
 
 
-def test_el_lector_avisa_cuando_no_hay_soporte(tmp_path: Path) -> None:
+def test_the_reader_reports_missing_support(tmp_path: Path) -> None:
     ruta = _ayudante(
         tmp_path,
         """
@@ -119,79 +119,75 @@ def test_el_lector_avisa_cuando_no_hay_soporte(tmp_path: Path) -> None:
     assert "atspi" in lector.motivo
 
 
-def test_el_lector_ignora_un_json_invalido(tmp_path: Path) -> None:
+def test_the_reader_ignores_invalid_json(tmp_path: Path) -> None:
     ruta = _ayudante(tmp_path, "print('esto no es json')")
     lector = TabReader(helper_path=ruta)
     assert lector.read() == []
 
 
-def test_el_lector_avisa_si_falta_el_ayudante(tmp_path: Path) -> None:
+def test_the_reader_reports_a_missing_helper(tmp_path: Path) -> None:
     lector = TabReader(helper_path=tmp_path / "no-existe.py")
     assert lector.read() == []
     assert lector.motivo
 
 
-def test_el_ayudante_real_esta_disponible() -> None:
+def test_the_real_helper_is_available() -> None:
     lector = TabReader()
     assert lector.disponible
 
 
-# ------------------------------------------------------------------ interfaz
+# ------------------------------------------------------------------ interface
 
 
-def test_el_estado_del_perfil_menciona_las_pestanas() -> None:
+def test_the_profile_status_mentions_the_tabs() -> None:
     perfil = Profile(id="Default", directory_name="Default", is_open=True, window_count=1)
-    assert perfil.status_text == "Abierto · 1 ventana"
+    assert perfil.status_text == "Open · 1 window"
     perfil.tab_count = 4
-    assert perfil.status_text == "Abierto · 1 ventana · 4 pestañas"
+    assert perfil.status_text == "Open · 1 window · 4 tabs"
 
 
-def test_la_tarjeta_muestra_el_numero_de_pestanas(app) -> None:
-    from PySide6.QtWidgets import QToolButton
+def test_the_card_shows_the_number_of_tabs(app) -> None:
+    from brave_workspace_manager.ui.profile_tab import ProfileTab
 
-    from brave_workspace_manager.ui.window_panel import WindowCard
+    perfil = Profile(id="Default", directory_name="Default", is_open=True, window_count=1)
+    perfil.tab_count = 3
+    tarjeta = ProfileTab(perfil)
+    tarjeta.resize(200, ProfileTab.HEIGHT)
+    tarjeta.set_windows([WindowInfo(window_id=1, pid=1, title="Ventana", tab_count=3)])
+    assert "3 tabs" in tarjeta._tabs.text()
 
-    ventana = WindowInfo(
-        window_id=1,
-        pid=1,
-        title="Ventana",
-        tab_count=3,
-        tab_titles=["Primera", "Segunda", "Tercera"],
+
+def test_a_closed_card_disables_its_buttons(app) -> None:
+    from brave_workspace_manager.ui.profile_tab import ProfileTab
+
+    tarjeta = ProfileTab(Profile(id="Default", directory_name="Default"))
+    assert all(not boton.isEnabled() for boton in tarjeta._buttons.values())
+    assert tarjeta._tabs.text() == ""
+
+
+def test_the_buttons_act_on_the_profile_window(app) -> None:
+    from brave_workspace_manager.ui.profile_tab import ProfileTab
+
+    perfil = Profile(id="Default", directory_name="Default", is_open=True, window_count=2)
+    tarjeta = ProfileTab(perfil)
+    tarjeta.set_windows(
+        [
+            WindowInfo(window_id=1, pid=1, title="Fondo"),
+            WindowInfo(window_id=2, pid=1, title="Activa", is_active=True),
+        ]
     )
-    tarjeta = WindowCard(ventana, [])
-    botones = tarjeta.findChildren(QToolButton)
-    assert botones
-    assert botones[0].text() == "3 pestañas"
+    recibidas: list[tuple[str, int, str]] = []
+    tarjeta.windowActionRequested.connect(lambda p, w, a: recibidas.append((p, w, a)))
+    for accion in ("minimize", "maximize", "close"):
+        tarjeta._buttons[accion].click()
+    assert recibidas == [
+        ("Default", 2, "minimize"),
+        ("Default", 2, "maximize"),
+        ("Default", 2, "close"),
+    ]
 
 
-def test_la_tarjeta_sin_pestanas_no_muestra_el_boton(app) -> None:
-    from PySide6.QtWidgets import QToolButton
-
-    from brave_workspace_manager.ui.window_panel import WindowCard
-
-    tarjeta = WindowCard(WindowInfo(window_id=1, pid=1, title="Ventana"), [])
-    assert not tarjeta.findChildren(QToolButton)
-
-
-def test_la_tarjeta_marca_la_pestana_activa(app) -> None:
-    from PySide6.QtWidgets import QLabel
-
-    from brave_workspace_manager.ui.window_panel import WindowCard
-
-    ventana = WindowInfo(
-        window_id=1,
-        pid=1,
-        title="Ventana",
-        tab_count=3,
-        tab_titles=["Primera", "Segunda", "Tercera"],
-        active_tab=1,
-    )
-    tarjeta = WindowCard(ventana, [])
-    textos = [etiqueta.text() for etiqueta in tarjeta.findChildren(QLabel)]
-    assert any(texto.startswith("▸ Segunda") for texto in textos)
-
-
-def test_el_estado_de_la_pestana_activa_se_calcula_desde_el_arbol(app) -> None:
+def test_the_active_tab_comes_from_the_tree(app) -> None:
     frame = FrameTabs(title="Ventana", titles=["Primera", "Segunda"], active=1)
     assert frame.active_title == "Segunda"
     assert FrameTabs(title="Ventana", titles=["Primera"]).active_title == ""

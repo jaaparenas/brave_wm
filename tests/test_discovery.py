@@ -1,4 +1,4 @@
-"""Pruebas del descubrimiento de perfiles nativos."""
+"""Tests of the discovery of native profiles."""
 
 from __future__ import annotations
 

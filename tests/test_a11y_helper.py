@@ -1,4 +1,4 @@
-"""Pruebas del ayudante de accesibilidad con un arbol de accesibilidad simulado."""
+"""Tests of the accessibility helper with a fake accessibility tree."""
 
 from __future__ import annotations
 
@@ -93,7 +93,7 @@ def _arbol() -> _Nodo:
 
 @pytest.fixture
 def atspi(monkeypatch):
-    """Inyecta un modulo gi simulado para no depender del escritorio real."""
+    """Injects a fake gi module so the tests do not depend on the real desktop."""
     modulo_gi = types.ModuleType("gi")
     modulo_gi.require_version = lambda *_args: None
     modulo_repository = types.ModuleType("gi.repository")
@@ -103,7 +103,7 @@ def atspi(monkeypatch):
     return modulo_repository.Atspi
 
 
-def test_encuentra_las_pestanas_de_la_franja(atspi) -> None:
+def test_finds_the_tabs_of_the_strip(atspi) -> None:
     frames = a11y_helper._frames_de_brave(atspi)
     assert len(frames) == 1
     assert frames[0]["title"] == "Ventana de prueba"
@@ -111,17 +111,17 @@ def test_encuentra_las_pestanas_de_la_franja(atspi) -> None:
     assert frames[0]["geometry"] == [100, 200, 800, 600]
 
 
-def test_ignora_las_pestanas_del_contenido_web(atspi) -> None:
+def test_ignores_tabs_inside_web_content(atspi) -> None:
     frames = a11y_helper._frames_de_brave(atspi)
     assert "Pestana de la pagina" not in frames[0]["tabs"]
 
 
-def test_informa_cual_es_la_pestana_activa(atspi) -> None:
+def test_reports_the_active_tab(atspi) -> None:
     frames = a11y_helper._frames_de_brave(atspi)
     assert frames[0]["active"] == 1
 
 
-def test_sin_pestanas_no_hay_activa(atspi) -> None:
+def test_without_tabs_there_is_no_active_one(atspi) -> None:
     escritorio = _Nodo(
         "application",
         "desktop",
@@ -138,7 +138,7 @@ def test_sin_pestanas_no_hay_activa(atspi) -> None:
     assert frames[0]["active"] == -1
 
 
-def test_prefiere_la_franja_con_pestanas(atspi) -> None:
+def test_prefers_the_strip_with_tabs(atspi) -> None:
     frame = _arbol().get_child_at_index(0).get_child_at_index(0)
     listas = a11y_helper._listas_de_pestanas(frame, atspi)
     assert len(listas) == 2
@@ -149,12 +149,12 @@ def test_prefiere_la_franja_con_pestanas(atspi) -> None:
     ]
 
 
-def test_sin_aplicaciones_devuelve_lista_vacia(atspi) -> None:
+def test_without_applications_returns_an_empty_list(atspi) -> None:
     vacio = _AtspiFalso(_Nodo("application", "desktop", children=[]))
     assert a11y_helper._frames_de_brave(vacio) == []
 
 
-def test_el_ayudante_responde_json(atspi, capsys) -> None:
+def test_the_helper_answers_json(atspi, capsys) -> None:
     a11y_helper.main()
     salida = capsys.readouterr().out
     assert '"ok": true' in salida

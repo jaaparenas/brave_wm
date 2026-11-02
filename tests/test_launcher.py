@@ -1,4 +1,4 @@
-"""Pruebas del lanzador de perfiles."""
+"""Tests of the profile launcher."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def test_spawn_failure_is_reported(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_launch_enables_the_accessibility_mode(monkeypatch, tmp_path: Path) -> None:
-    """Sin el flag Chromium no publica la barra de pestanas por AT-SPI."""
+    """Without the flag Chromium does not publish its tab strip through AT-SPI."""
     recorder = _Recorder()
     monkeypatch.setattr(subprocess, "Popen", recorder)
     launcher = ProfileLauncher("/usr/bin/brave-browser", tmp_path)

@@ -1,4 +1,4 @@
-"""Brave Workspace Manager: administracion de perfiles nativos de Brave."""
+"""Brave Workspace Manager: management of native Brave profiles."""
 
 from __future__ import annotations
 

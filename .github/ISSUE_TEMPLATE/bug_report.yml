@@ -1,37 +1,37 @@
-name: Reporte de error
-description: Informar de un problema reproducible
+name: Bug report
+description: Report a reproducible problem
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Gracias por el reporte. Un par de datos ayudan a diagnosticar:
-        el backend de ventanas, la version de Brave y la distribucion.
+        Thanks for the report. A few details help with the diagnosis:
+        the window backend, the Brave version and the distribution.
   - type: textarea
-    id: que-pasa
+    id: what-happens
     attributes:
-      label: Que ocurre
-      description: Describe el comportamiento esperado y el observado.
+      label: What happens
+      description: Describe the expected and the observed behaviour.
     validations:
       required: true
   - type: textarea
-    id: pasos
+    id: steps
     attributes:
-      label: Pasos para reproducirlo
+      label: Steps to reproduce
       placeholder: |
         1. ...
         2. ...
     validations:
       required: true
   - type: input
-    id: entorno
+    id: environment
     attributes:
-      label: Entorno
+      label: Environment
       description: "Linux Mint 22.3, Cinnamon 6.4, Brave 1.7x, backend x11"
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Salida de la terminal
+      label: Terminal output
       render: shell

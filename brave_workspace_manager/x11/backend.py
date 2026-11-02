@@ -1,10 +1,10 @@
-"""Backend X11/EWMH basado en python-xlib (sin dependencias de sistema)."""
+"""X11/EWMH backend built on python-xlib (no system dependency)."""
 
 from __future__ import annotations
 
 from ..models import WindowInfo
 
-try:  # pragma: no cover - depende del entorno
+try:  # pragma: no cover - depends on the environment
     from Xlib import X, Xatom, display, error, protocol
 except Exception:  # pragma: no cover
     X = Xatom = display = error = protocol = None  # type: ignore[assignment]
@@ -23,7 +23,7 @@ ATOMS = (
 
 
 class X11Backend:
-    """Enumera y controla ventanas mediante el protocolo EWMH."""
+    """Lists and controls windows through the EWMH protocol."""
 
     name = "x11"
 
@@ -116,7 +116,7 @@ class X11Backend:
         return names
 
     def _geometry(self, window) -> tuple[int, int, int, int]:
-        """Posicion y tamano de la ventana en coordenadas de pantalla."""
+        """Position and size of the window in screen coordinates."""
         try:
             geo = window.get_geometry()
             x, y = geo.x, geo.y
@@ -131,7 +131,7 @@ class X11Backend:
             pass
         return (int(x), int(y), int(width), int(height))
 
-    # ------------------------------------------------------------- ventanas
+    # ------------------------------------------------------------- windows
 
     def list_windows(self) -> list[WindowInfo]:
         try:
@@ -166,6 +166,10 @@ class X11Backend:
                     is_active=window_id == active,
                     is_minimized=(
                         "_NET_WM_STATE_HIDDEN" in states or "_NET_WM_STATE_MINIMIZED" in states
+                    ),
+                    is_maximized=(
+                        "_NET_WM_STATE_MAXIMIZED_VERT" in states
+                        or "_NET_WM_STATE_MAXIMIZED_HORZ" in states
                     ),
                     x=geometry[0],
                     y=geometry[1],
@@ -237,6 +241,34 @@ class X11Backend:
 
     def minimize(self, window_id: int) -> bool:
         return self._send_state(window_id, "_NET_WM_STATE_HIDDEN", remove=False)
+
+    def maximize(self, window_id: int) -> bool:
+        """Adds the two EWMH states that make a window fill the screen."""
+        vertical = self._send_state(window_id, "_NET_WM_STATE_MAXIMIZED_VERT", remove=False)
+        horizontal = self._send_state(window_id, "_NET_WM_STATE_MAXIMIZED_HORZ", remove=False)
+        return vertical and horizontal
+
+    def unmaximize(self, window_id: int) -> bool:
+        """Removes the maximised states, keeping the previous size."""
+        vertical = self._send_state(window_id, "_NET_WM_STATE_MAXIMIZED_VERT", remove=True)
+        horizontal = self._send_state(window_id, "_NET_WM_STATE_MAXIMIZED_HORZ", remove=True)
+        return vertical and horizontal
+
+    def close_window(self, window_id: int) -> bool:
+        """Asks the window to close the polite way (WM_DELETE_WINDOW)."""
+        try:
+            d = self._display()
+            window = self._window(window_id)
+            event = protocol.event.ClientMessage(
+                window=window,
+                client_type=self._atom("WM_PROTOCOLS"),
+                data=(32, [self._atom("WM_DELETE_WINDOW"), X.CurrentTime, 0, 0, 0]),
+            )
+            window.send_event(event, event_mask=X.NoEventMask)
+            d.flush()
+            return True
+        except Exception:
+            return False
 
     def close(self) -> None:
         try:

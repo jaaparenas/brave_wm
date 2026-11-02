@@ -1,79 +1,128 @@
 # Changelog
 
-Todas las novedades de este proyecto se anotan aqui.
-El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/) y el
-proyecto usa [versionado semantico](https://semver.org/lang/es/).
+All notable changes to this project are recorded here.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+and the project uses [semantic versioning](https://semver.org/).
+
+## [1.1.0] — 2026-11-02
+
+### Added
+
+- Window controls on every profile card: activate, minimise / restore,
+  maximise / restore and close, plus a "…" menu with per-window actions when a
+  profile has several windows. Closed profiles show no action buttons.
+- Closing a window is a polite request (`WM_DELETE_WINDOW` with python-xlib,
+  `wmctrl -c` with the fallback backend); processes are never killed.
+- Drag and drop to reorder the profile cards; the order is saved.
+- Custom image per profile, from the administration panel (**Choose image…**
+  / **Remove image**) or the card's context menu (**Change image…**). PNG,
+  JPG/JPEG, WebP, BMP and GIF are accepted. The file is copied to
+  `~/.local/share/brave-workspace-manager/images/`; Brave's files are not
+  touched.
+- **Unassigned windows** card at the end of the gallery: pick a window and
+  assign it to an existing profile, save it as a new profile, or activate,
+  minimise or close it.
+- Virtual profiles: **Save as new profile** creates a profile that exists only
+  inside the app and owns that window. Virtual profiles cannot be launched
+  directly because they have no Brave profile folder.
+- Internationalisation: English and Spanish interface; the first start
+  follows the system language and English is the fallback. Flat key→text JSON catalogues in
+  `brave_workspace_manager/locales/`, a language selector in the header that
+  switches live, the choice saved in the `language` setting, and a
+  `--language` command-line option. New languages are added by dropping a new
+  catalogue file.
+- Automatic database migration that adds the `custom_image` and `is_virtual`
+  columns to the `profiles` table.
+- Tests for the translation layer, including a check that every catalogue has
+  the same keys. 124 tests in total.
+
+### Changed
+
+- The left column shows the summary on top and the administration panel
+  (profiles table, customisation, settings and shortcuts) below it, always
+  visible.
+- The profile gallery sits on the right, centred, and each open profile's card
+  shows its number of tabs.
+- All documentation is now in English. Screenshots moved to
+  `docs/images/main-window.png`, `docs/images/main-window-es.png` and
+  `docs/images/unassigned-card.png`.
+
+### Removed
+
+- The **Administrator** toggle button and its `Ctrl+Alt+B` shortcut (the
+  administration panel is always visible now).
+- The **Tray** button in the header. The system tray icon remains available as
+  a setting in the administration panel.
+- The bottom panel with the windows of the selected profile
+  (`ui/window_panel.py`); its actions now live on the cards.
+- The old screenshots `docs/images/ventana-principal.png` and
+  `docs/images/panel-admin.png`.
 
 ## [1.0.0] — 2026-11-02
 
-### Añadido
+### Added
 
-- Descubrimiento no destructivo de los perfiles nativos de Brave a partir de
-  `Local State` y de las carpetas del directorio de datos, con el nombre
-  visible, el avatar y el estado abierto/cerrado de cada perfil.
-- Barra de perfiles con color, icono, avatar, marca de favorito y orden
-  personalizable, con persistencia en SQLite.
-- Panel de ventanas con activacion, minimizacion, restauracion y asignacion
-  manual, y seccion independiente para las ventanas que Chromium no permite
-  identificar.
-- Resolucion ventana-perfil en cinco reglas (asignacion aprendida, perfil
-  unico abierto, coincidencia de titulo, eliminacion y sin asignar) con
-  confianza visible.
-- Panel de administrador: tabla de perfiles, personalizacion (nombre, color,
-  icono, favorito), orden, ajustes y edicion de atajos.
-- Atajos globales `Ctrl+Alt+1`…`9`, `Ctrl+Alt+Tab`, `Ctrl+Alt+Shift+Tab` y
-  `Ctrl+Alt+B`, con deteccion de conflictos y copia local de respaldo.
-- Icono en la bandeja del sistema e inicio automatico mediante fichero
-  `.desktop` de XDG.
-- Backends de ventanas intercambiables: EWMH con `python-xlib`, alternativa con
-  `wmctrl` y modo degradado sin soporte de ventanas.
-- Modo de linea de comandos: `--version`, `--minimized` y `--user-data-dir`.
-- Instancia unica mediante `QLockFile`.
-- Recuento de las pestanas abiertas de cada ventana y de cada perfil, leidas
-  del arbol de accesibilidad del navegador (AT-SPI) en un proceso aparte, con
-  la lista de titulos desplegable y la pestana activa marcada. El lanzador
-  abre los perfiles con `--force-renderer-accessibility`, sin el cual Chromium
-  no publica su barra de pestanas; si el navegador ya estaba en marcha, la
-  aplicacion avisa de que solo se ve la pestana activa.
-- Ajuste **Listar las pestanas abiertas** para desactivar la lectura y el flag
-  del navegador.
-- 96 pruebas automaticas que no acceden a los datos reales del navegador.
-- Publicacion en GitHub con licencia MIT, empaquetado `pyproject.toml`,
-  instaladores, servicio de systemd de usuario e integracion continua.
+- Non-destructive discovery of Brave's native profiles from `Local State` and
+  the folders of the data directory, with each profile's display name, avatar
+  and open/closed status.
+- Profile bar with colour, icon, avatar, favourite mark and custom order,
+  persisted in SQLite.
+- Windows panel with activate, minimise, restore and manual assignment, and a
+  separate section for the windows Chromium does not allow to identify.
+- Window-to-profile resolution with five rules (learned assignment, single
+  open profile, title match, elimination and unassigned) with visible
+  confidence.
+- Administrator panel: profiles table, customisation (name, colour, icon,
+  favourite), order, settings and shortcut editing.
+- Global shortcuts `Ctrl+Alt+1`…`9`, `Ctrl+Alt+Tab`, `Ctrl+Alt+Shift+Tab` and
+  `Ctrl+Alt+B`, with conflict detection and local fallback shortcuts.
+- System tray icon and autostart through an XDG `.desktop` file.
+- Interchangeable window backends: EWMH with `python-xlib`, a `wmctrl`
+  fallback and a degraded mode without window support.
+- Command-line options: `--version`, `--minimized` and `--user-data-dir`.
+- Single instance through `QLockFile`.
+- Count of the open tabs of each window and each profile, read from the
+  browser's accessibility tree (AT-SPI) in a separate process, with a
+  drop-down list of titles and the active tab marked. The launcher opens
+  profiles with `--force-renderer-accessibility`, without which Chromium does
+  not publish its tab strip; if the browser was already running, the app
+  warns that only the active tab is visible.
+- **List the open tabs** setting to turn off tab reading and the browser flag.
+- 96 automated tests that never access the browser's real data.
+- GitHub release with MIT licence, `pyproject.toml` packaging, installers, a
+  systemd user service and continuous integration.
 
-### Cambiado
+### Changed
 
-- La barra horizontal de perfiles se sustituye por una **galeria**: las fichas
-  se reparten en columnas que dependen del ancho de la ventana, el conjunto
-  queda centrado y el perfil activo se resalta con un borde de acento.
-- El resumen de los perfiles pasa a ser un panel fijo a la izquierda que
-  permanece siempre visible con el total de perfiles, los abiertos, los
-  cerrados, los favoritos, las ventanas de Brave detectadas, las ventanas sin
-  asignar y el perfil activo.
-- Cada ficha muestra el avatar, el nombre, el estado y la marca de favorito en
-  vertical, con el color del perfil en la parte superior.
+- The horizontal profile bar is replaced by a **gallery**: cards are laid out
+  in columns that depend on the window width, the grid is centred and the
+  active profile is highlighted with an accent border.
+- The profile summary becomes a fixed panel on the left that is always
+  visible, with the total of profiles, open, closed and favourite profiles,
+  Brave windows detected, unassigned windows and the active profile.
+- Each card shows the avatar, name, status and favourite mark vertically, with
+  the profile colour on top.
 
-### Seguridad
+### Security
 
-- Ninguna escritura en los datos internos de Brave.
-- Sin acceso a cookies, contrasenas, historial, URLs ni trafico HTTPS.
-- La creacion y el renombrado de perfiles se delegan en el gestor nativo de
-  Brave.
-- De la barra de pestanas solo se lee el titulo de cada pestaña, en memoria:
-  no se guarda en disco ni se envia a ninguna parte, y no se leen URLs,
-  cookies ni historial.
+- No writes to Brave's internal data.
+- No access to cookies, passwords, history, URLs or HTTPS traffic.
+- Creating and renaming profiles in Brave is delegated to Brave's native
+  profile manager.
+- Only the title of each tab is read from the tab strip, in memory: it is not
+  saved to disk or sent anywhere, and no URLs, cookies or history are read.
 
-### Corregido
+### Fixed
 
-- Los atajos globales ya se reservan de verdad en el servidor X: se usa la
-  firma correcta de `grab_key` con manejador de error por peticion, y el
-  hilo de captura lee los eventos con `next_event()` en lugar de tratar
-  `pending_events()` como una lista.
-- Los atajos se registran despues de arrancar la aplicacion, de modo que ya
-  funcionan aunque el panel de administrador se abra mas tarde.
-- La ventana de la propia aplicacion ya no aparece en el panel de ventanas de
-  Brave: se filtra por PID propio y por clase `brave-browser`.
-- Si la aplicacion termina de forma abrupta, el fichero de instancia se
-  recupera solo cuando el proceso que lo creo ya no existe.
-- Las fichas de la galeria ya no se quedan ocultas cuando la lista de
-  perfiles se actualiza con la ventana ya visible.
+- Global shortcuts are now really reserved in the X server: the correct
+  `grab_key` signature is used with a per-request error handler, and the grab
+  thread reads events with `next_event()` instead of treating
+  `pending_events()` as a list.
+- Shortcuts are registered after the application starts, so they work even if
+  the administrator panel is opened later.
+- The application's own window no longer appears in the Brave windows panel:
+  it is filtered out by its own PID and by the `brave-browser` class.
+- If the application ends abruptly, the instance lock file is recovered only
+  when the process that created it no longer exists.
+- Gallery cards no longer stay hidden when the profile list is updated while
+  the window is already visible.

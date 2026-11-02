@@ -1,4 +1,4 @@
-"""Pruebas de la captura de atajos globales."""
+"""Tests of the global shortcut grab."""
 
 from __future__ import annotations
 

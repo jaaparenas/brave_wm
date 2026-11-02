@@ -1,76 +1,117 @@
 # Brave Workspace Manager
 
-![Linux Mint](https://img.shields.io/badge/sistema-Linux%20Mint%20%2F%20Cinnamon-c70000)
+![Linux Mint](https://img.shields.io/badge/system-Linux%20Mint%20%2F%20Cinnamon-c70000)
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776ab)
-![Licencia](https://img.shields.io/badge/licencia-MIT-green)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-Administrador de **perfiles nativos de Brave** para Linux Mint / Cinnamon.
+A manager for **native Brave profiles** on Linux Mint / Cinnamon.
 
-Orquesta los perfiles que ya tienes en Brave (los que aparecen en
-`brave://settings/manageProfile`) desde una unica ventana: galeria de perfiles,
-panel de ventanas, atajos globales, bandeja del sistema y personalizacion
-(nombre visible, color, icono y favorito) **sin modificar jamas los datos
-internos de Brave**.
+It organises the profiles you already have in Brave (the ones listed in
+`brave://settings/manageProfile`) from a single window: a gallery of profile
+cards with window controls, global shortcuts, an optional system tray icon and
+per-profile customisation (display name, colour, icon, image and favourite
+mark) — **without ever modifying Brave's internal data**.
 
-![Captura de la ventana principal](docs/images/ventana-principal.png)
+The interface is available in English and Spanish, and new languages can be
+added with a single JSON file.
 
----
-
-## Indice
-
-- [Que hace](#que-hace)
-- [Requisitos](#requisitos)
-- [Instalacion](#instalacion)
-- [Uso](#uso)
-- [Como se asocia cada ventana con su perfil](#como-se-asociada-cada-ventana-con-su-perfil)
-- [Como se cuentan las pestanas abiertas](#como-se-cuentan-las-pestanas-abiertas)
-- [Atajos de teclado](#atajos-de-teclado)
-- [Reglas de seguridad](#reglas-de-seguridad)
-- [Donde guarda los datos](#donde-guarda-los-datos)
-- [Estructura del proyecto](#estructura-del-proyecto)
-- [Desarrollo y pruebas](#desarrollo-y-pruebas)
-- [Licencia](#licencia)
+![Main window](docs/images/main-window.png)
 
 ---
 
-## Que hace
+## Contents
 
-- **Descubre** los perfiles nativos de Brave leyendo `Local State` y las carpetas
-  del directorio de datos. Solo lectura: nunca escribe en ellos.
-- **Muestra una galeria de perfiles** que se reorganiza sola segun el tamano de
-  la ventana, con el estado de cada uno (abierto o cerrado), su avatar y su
-  color, y un resumen fijo a la izquierda con los contadores.
-- **Activa un perfil** con un clic: trae al frente su ventana si la conoce, o
-  la abre en su directorio nativo (`--profile-directory=Default`) si no.
-- **Gestiona las ventanas** de Brave: activar, minimizar, restaurar y asignar
-  manualmente una ventana a un perfil.
-- **Cuenta las pestanas abiertas** de cada ventana y de cada perfil, y muestra
-  cuales son y cual esta en primer plano.
-- **Aprende** la correspondencia ventana-perfil con el uso, de modo que las
-  asignaciones se repiten cada vez que se lanzan los perfiles desde la app.
-- **Personaliza** cada perfil con un nombre visible, color, icono y marca de
-  favorito.
-- **Atajos globales** (`Ctrl+Alt+1`…`9`, `Ctrl+Alt+Tab`, `Ctrl+Alt+B`) y
-  bandeja del sistema con acceso rapido.
-- **Instalable** como aplicacion de escritorio (`packaging/*.desktop`),
-  servicio de systemd de usuario y script de arranque automatico.
+- [Security guarantees](#security-guarantees)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Usage](#usage)
+- [How each window is matched to its profile](#how-each-window-is-matched-to-its-profile)
+- [How open tabs are counted](#how-open-tabs-are-counted)
+- [Keyboard shortcuts](#keyboard-shortcuts)
+- [Languages](#languages)
+- [Where data is stored](#where-data-is-stored)
+- [Project structure](#project-structure)
+- [Development and tests](#development-and-tests)
+- [License](#license)
 
-## Requisitos
+---
 
-| Requisito | Detalle |
+## Security guarantees
+
+The application **only reads** Brave's data directory:
+
+- It never modifies `Local State` or any internal database of the profiles.
+- It never reads, copies or decrypts cookies, passwords, tokens, history,
+  sessions or URLs.
+- It does not intercept HTTPS traffic and does not install certificates.
+- It opens profiles only with `--profile-directory=<folder>` on the single
+  Brave instance, so it never starts parallel instances over the same profile.
+- It does not change Brave's configuration. Creating and renaming profiles in
+  Brave is left to Brave's own profile manager
+  (`brave://settings/manageProfile`); the app stores its own display names in
+  its own database.
+- Everything the app saves (its preferences, learned window assignments,
+  custom profile images) lives in `~/.local/share/brave-workspace-manager/`.
+  Custom images are **copied** there; Brave's files are never touched.
+- Closing a window from the app is a polite request (`WM_DELETE_WINDOW`, or
+  `wmctrl -c`), the same as clicking the window's close button. No process is
+  ever killed.
+
+The only thing read from outside the app's own directory, apart from the
+profile list, is the **tab titles** that the browser publishes through the
+AT-SPI accessibility tree when it runs in accessibility mode (the app adds
+`--force-renderer-accessibility` when it opens a profile). The titles are read
+locally, kept in memory only, and never stored or sent anywhere.
+
+## Features
+
+- **Discovers** Brave's native profiles by reading `Local State` and the
+  profile folders of the data directory. Read-only.
+- **Profile gallery**: a responsive grid of cards, centred on the right side
+  of the window, that rearranges itself to the window width. Each card shows
+  the profile's avatar or custom image, colour, name, open/closed status,
+  favourite mark and, for open profiles, the number of windows and tabs.
+- **Window controls on each card**: icon buttons to activate, minimise /
+  restore, maximise / restore and close the profile's window. When a profile
+  has several windows, a **"…"** menu lists them with per-window actions.
+  Closed profiles show no action buttons.
+- **Activates a profile** with one click: brings its window to the front if
+  the app knows it, or opens the profile in its native folder
+  (`--profile-directory=Default`) otherwise.
+- **Drag and drop** cards to reorder them; the order is saved.
+- **Unassigned windows card**: the last card of the gallery collects the Brave
+  windows that cannot be attributed automatically. Pick a window and assign it
+  to an existing profile, save it as a new profile, or activate, minimise or
+  close it.
+- **Counts open tabs** per window and per profile; the card's tooltip lists
+  the tab titles.
+- **Learns** the window-to-profile mapping as you use it, so assignments are
+  repeated each time profiles are launched from the app.
+- **Customises** each profile with a display name, colour, icon, custom image
+  and favourite mark.
+- **Global shortcuts** (`Ctrl+Alt+1`…`9`, `Ctrl+Alt+Tab`,
+  `Ctrl+Alt+Shift+Tab`) and an optional system tray icon.
+- **Bilingual interface** (English and Spanish) with a live language selector.
+- **Installable** as a desktop application (`packaging/*.desktop`), a systemd
+  user service, and with an autostart entry.
+
+## Requirements
+
+| Requirement | Details |
 |---|---|
-| Sistema | Linux con sesion **X11** (probado en Linux Mint 22.3 / Cinnamon) |
-| Navegador | Brave instalado (`brave-browser` en el `PATH` o `/opt/brave.com/brave/brave`) |
-| Python | 3.10 o superior |
-| Dependencias | `PySide6` (interfaz) y `python-xlib` (protocolo X11, sin dependencias del sistema) |
-| Opcional | `python3-gi` (PyGObject) para leer las pestanas por AT-SPI; sin el, la app funciona igual pero solo muestra la pestana activa |
+| System | Linux with an **X11** session (tested on Linux Mint 22.3 / Cinnamon) |
+| Browser | Brave installed (`brave-browser` on the `PATH` or `/opt/brave.com/brave/brave`) |
+| Python | 3.10 or later |
+| Dependencies | `PySide6` (interface) and `python-xlib` (X11 protocol, no system dependencies) |
+| Optional | `python3-gi` (PyGObject) to read tabs through AT-SPI; without it the app works the same but only shows the active tab |
 
-> En Wayland la gestion de ventanas no es posible de forma fiable, por lo que la
-> aplicacion funciona en modo degradado: descubre perfiles y los abre, pero no
-> puede enumerar ni activar ventanas. La barra de estado indica el backend
-> activo (`x11`, `wmctrl` o `none`).
+> On Wayland, window management is not reliably possible, so the application
+> runs in degraded mode: it discovers and opens profiles, but cannot list or
+> activate windows. The status bar shows the active backend (`x11`, `wmctrl`
+> or `none`).
 
-## Instalacion
+## Installation
 
 ```bash
 git clone https://github.com/jaaparenas/brave-workspace-manager.git
@@ -78,10 +119,11 @@ cd brave-workspace-manager
 ./setup.sh
 ```
 
-`setup.sh` crea un entorno virtual en `.venv`, instala las dependencias y
-genera el lanzador `brave-workspace-manager` en `~/.local/bin`.
+`setup.sh` creates a virtual environment in `.venv`, installs the
+dependencies and generates the `brave-workspace-manager` launcher in
+`~/.local/bin`.
 
-Instalacion manual, si prefieres no usar el script:
+Manual installation, if you prefer not to use the script:
 
 ```bash
 python3 -m venv .venv
@@ -89,169 +131,204 @@ python3 -m venv .venv
 .venv/bin/python -m brave_workspace_manager
 ```
 
-## Uso
+## Usage
 
 ```bash
-./run.sh                       # lanza la aplicacion
-brave-workspace-manager        # si la instalaste con setup.sh
-brave-workspace-manager --minimized          # arranca en la bandeja
-brave-workspace-manager --user-data-dir /ruta/alternativa   # otro directorio de datos
+./run.sh                                             # start the application
+brave-workspace-manager                              # if installed with setup.sh
+brave-workspace-manager --minimized                  # start hidden in the system tray
+brave-workspace-manager --user-data-dir /other/path  # another Brave data directory
+brave-workspace-manager --language es                # interface language
 brave-workspace-manager --version
 ```
 
-La ventana principal tiene cuatro zonas:
+The main window has a header and two columns:
 
-1. **Galeria de perfiles**: las fichas se reacomodan solas al cambiar el ancho
-   de la ventana y el conjunto queda centrado. Un clic selecciona el perfil,
-   doble clic lo abre y el menu contextual da acceso a las acciones rapidas.
-   A la izquierda, el **resumen** permanece siempre visible con el numero de
-   perfiles, los abiertos, los favoritos, las ventanas de Brave detectadas, las
-   pestanas abiertas y el perfil activo.
-2. **Panel de ventanas**: las ventanas de Brave asociadas al perfil
-   seleccionado, con acciones de activar, minimizar y restaurar, y el numero de
-   pestanas de cada una.
-3. **Ventanas sin asignar**: las ventanas que Chromium no permite identificar
-   de forma automatica; se pueden asignar a mano con el desplegable o con el
-   boton **Tomar la ventana activa**.
-4. **Administrador** (`Ctrl+Alt+B`): tabla de perfiles, personalizacion,
-   atajos y ajustes (intervalo de actualizacion, bandeja, inicio automatico).
+- **Header**: language selector, **Refresh** and **Help**.
+- **Left column**, always visible:
+  - **Summary**: number of profiles, open, closed and favourite profiles,
+    Brave windows detected, open tabs, unassigned windows and the active
+    profile.
+  - **Administration panel**: the table of detected profiles, profile
+    customisation (name, colour, icon, image, favourite, order, open, reset,
+    and a button for Brave's own profile manager), settings (refresh
+    interval, activate on click, global shortcuts, system tray icon, start
+    with the system, list open tabs) and the shortcut editor.
+- **Right column**: the **profile gallery**. A click selects (and, by
+  default, activates) a profile, a double click opens it, and the context menu
+  gives quick actions: activate, open, take the active window, rename, change
+  colour, icon or image, favourite, move up/down and reset. Drag a card to
+  reorder. The last card is **Unassigned windows**.
 
-## Como se asocia cada ventana con su perfil
+![Unassigned windows card](docs/images/unassigned-card.png)
 
-Este es el punto tecnico mas delicado del proyecto, asi que conviene explicarlo
-con honestidad.
+### Custom profile images
 
-**Chromium no expone que perfil pertenece a cada ventana.** No hay propiedad
-X11, ni variable de entorno, ni fichero en disco que lo indique: todas las
-ventanas de todos los perfiles de un mismo `user-data-dir` comparten un unico
-proceso del navegador, de modo que el PID de una ventana no identifica su
-perfil. La aplicacion no lo inventa: usa una cascada de reglas, de la mas
-fiable a la menos, y **dice con que confianza resolvio cada caso**.
+Choose an image with **Choose image…** in the administration panel or
+**Change image…** in a card's context menu, and remove it with **Remove
+image**. Supported formats: PNG, JPG/JPEG, WebP, BMP and GIF. The file is
+copied to `~/.local/share/brave-workspace-manager/images/`, so the original
+can be moved or deleted afterwards.
 
-| Orden | Regla | Confianza | Como funciona |
+### Virtual profiles
+
+**Save as new profile** on the Unassigned windows card creates a *virtual*
+profile: a profile that exists only inside the app and owns that window. It
+can be customised, reordered and used to activate its window like any other
+profile, but it cannot be launched directly because it has no Brave profile
+folder behind it.
+
+## How each window is matched to its profile
+
+This is the most delicate technical part of the project, so it is worth
+explaining honestly.
+
+**Chromium does not expose which profile each window belongs to.** There is
+no X11 property, environment variable or file on disk that says so: all
+windows of all profiles in the same `user-data-dir` share a single browser
+process, so a window's PID does not identify its profile. The app does not
+guess: it applies a cascade of rules, from most to least reliable, and
+**reports the confidence with which it resolved each case**.
+
+| Order | Rule | Confidence | How it works |
 |---|---|---|---|
-| 1 | Asignacion aprendida | 100 % | Se guarda en la base de datos local cuando la app lanza un perfil o cuando el usuario asigna una ventana a mano. |
-| 2 | Perfil unico abierto | 90 % | Si solo hay un perfil abierto, todas las ventanas de Brave son suyas. |
-| 3 | Titulo de la ventana | 60 % | Si el nombre del perfil aparece como palabra completa en el titulo (`Work · Panel de control`). |
-| 4 | Eliminacion | 50 % | Si queda una sola ventana sin asignar y un solo perfil abierto sin ventanas, ambos se corresponden. |
-| 5 | Sin asignar | 0 % | Se muestra en el apartado **Ventanas sin asignar** para que la resuelvas tu. |
+| 1 | Learned assignment | 100 % | Stored in the local database when the app launches a profile or when the user assigns a window by hand. |
+| 2 | Single open profile | 90 % | If only one profile is open, every Brave window belongs to it. |
+| 3 | Window title | 60 % | The profile name appears as a whole word in the title (`Work · Dashboard`). |
+| 4 | Elimination | 50 % | If exactly one window is unassigned and exactly one open profile has no windows, they belong together. |
+| 5 | Unassigned | 0 % | Shown on the **Unassigned windows** card for you to resolve. |
 
-Los perfiles **abiertos** si se detectan de forma fiable: el proceso del
-navegador mantiene ficheros abiertos dentro de la carpeta del perfil, y se
-inspeccionan sus descriptores (`/proc/<pid>/fd`).
+**Open** profiles, on the other hand, are detected reliably: the browser
+process keeps files open inside the profile folder, and its file descriptors
+(`/proc/<pid>/fd`) are inspected.
 
-Las asignaciones aprendidas se conservan por PID de navegador y por
-identificador de ventana, de modo que se reutilizan en sesiones posteriores.
+Learned assignments are kept per browser PID and window id, so they are reused
+in later sessions.
 
-## Como se cuentan las pestanas abiertas
+## How open tabs are counted
 
-Chromium no expone por X11/EWMH quantas pestanas tiene una ventana: por ese
-protocolo solo se ve el titulo de la ventana, que es el de la pestana activa.
-La unica via local que no toca los datos del navegador es el **arbol de
-accesibilidad** (AT-SPI), el mismo que usa un lector de pantalla.
+Chromium does not expose through X11/EWMH how many tabs a window has: that
+protocol only gives the window title, which is the title of the active tab.
+The only local route that does not touch the browser's data is the
+**accessibility tree** (AT-SPI), the same one screen readers use.
 
-- La aplicacion ejecuta `brave_workspace_manager/a11y_helper.py` en un proceso
-  aparte (el entorno virtual puede no tener PyGObject) y recibe un JSON con las
-  ventanas y sus pestanas.
-- Chromium solo publica su interfaz, y con ella la barra de pestanas, cuando se
-  abre con `--force-renderer-accessibility`. Por eso el lanzador anade ese flag a
-  los perfiles que abre la aplicacion. Si Brave ya estaba en marcha, hay que
-  cerrarlo del todo y volver a abrir un perfil desde la app; mientras tanto la
-  ventana avisa de que solo se ve la pestana activa.
-- Cada ventana de Brave muestra un boton con el numero de pestanas; al
-  desplegarlo aparece la lista de titulos, con la pestana activa marcada.
-- El resumen de la izquierda cuenta las pestanas abiertas de todos los perfiles.
+- The app runs `brave_workspace_manager/a11y_helper.py` in a separate process
+  (the virtual environment may not have PyGObject) and receives JSON with the
+  windows and their tabs.
+- Chromium only publishes its interface, including the tab strip, when it is
+  started with `--force-renderer-accessibility`. That is why the launcher adds
+  this flag to the profiles the app opens. If Brave was already running, close
+  it completely and open a profile from the app; until then the window warns
+  that only the active tab is visible.
+- Each card shows the number of tabs; its tooltip lists the titles.
+- The summary counts the open tabs of all profiles.
 
-Solo se leen los **titulos** de las pestanas, y solo en memoria: no se guardan
-en disco ni se envian a ninguna parte. La opcion **Listar las pestanas
-abiertas** del panel de administrador desactiva la lectura y deja de anadir el
-flag al navegador.
+Only tab **titles** are read, and only in memory: they are never written to
+disk or sent anywhere. The **List the open tabs** setting turns reading off
+and stops adding the flag to the browser.
 
-## Atajos de teclado
+## Keyboard shortcuts
 
-| Atajo | Accion |
+| Shortcut | Action |
 |---|---|
-| `Ctrl+Alt+1` … `Ctrl+Alt+9` | Activar el perfil N |
-| `Ctrl+Alt+Tab` | Perfil siguiente |
-| `Ctrl+Alt+Shift+Tab` | Perfil anterior |
-| `Ctrl+Alt+B` | Mostrar u ocultar el administrador |
+| `Ctrl+Alt+1` … `Ctrl+Alt+9` | Activate profile N (gallery order) |
+| `Ctrl+Alt+Tab` | Next profile |
+| `Ctrl+Alt+Shift+Tab` | Previous profile |
 
-Todos son configurables en el panel de administrador. Los atajos globales se
-registran mediante capturas pasivas de teclado en la ventana raiz de X11; si
-otra aplicacion ya usa la combinacion, la aplicacion avisa y desactiva ese
-atajo en lugar de fallar.
+All of them can be changed in the administration panel. Global shortcuts are
+registered as passive keyboard grabs on the X11 root window; if another
+application already uses a combination, the app reports it and disables that
+shortcut instead of failing.
 
-## Reglas de seguridad
+## Languages
 
-La aplicacion **solo lee** el directorio de datos de Brave:
+The interface ships in **English** (fallback) and **Spanish**. On the first
+start it follows the system language when a catalogue exists for it.
+Switch language with the selector in the header; the change applies
+immediately and is remembered. You can also start with
+`--language es`.
 
-- No modifica `Local State` ni ninguna base de datos interna de los perfiles.
-- No copia, lee ni descifra cookies, contraseñas, historial o sesiones.
-- No intercepta trafico HTTPS ni instala certificados.
-- No modifica la configuracion de Brave; crear perfiles se delega en el gestor
-  de perfiles nativo (`brave://settings/manageProfile`).
-- Todo lo que la aplicacion guarda (preferencias de la app, asignaciones
-  aprendidas) vive en `~/.local/share/brave-workspace-manager/`.
+### Adding a language
 
-Lo unico que se lee fuera de ese directorio son los **titulos de las pestanas**
-que el navegador publica por AT-SPI cuando se abre con el modo de
-accesibilidad activado. No se leen URLs, ni cookies, ni el historial, y esos
-titulos no se guardan en ningun sitio.
+Translations are flat JSON catalogues in
+`brave_workspace_manager/locales/`, one file per language, mapping keys to
+texts. Placeholders use Python `str.format` syntax (`{name}`, `{count}`).
 
-## Donde guarda los datos
+1. Copy `en.json` to `<code>.json` (for example `fr.json` or `pt.json`).
+2. Translate the values. Keep the keys and the `{placeholders}` unchanged.
+3. Set `"language_name"` to the language's own name (for example
+   `"Français"`).
+4. Run the tests: `tests/test_i18n.py` checks that every catalogue has exactly
+   the same keys as `en.json` and no empty texts.
 
-| Que | Donde |
+The new language appears in the selector automatically; no code changes are
+needed. Missing keys fall back to English.
+
+## Where data is stored
+
+| What | Where |
 |---|---|
-| Base de datos local (SQLite) | `~/.local/share/brave-workspace-manager/workspace.db` |
-| Registro | `~/.local/state/brave-workspace-manager/` |
-| Configuracion | `~/.config/brave-workspace-manager/` |
-| Inicio automatico | `~/.config/autostart/brave-workspace-manager.desktop` |
+| Local database (SQLite) | `~/.local/share/brave-workspace-manager/workspace.db` |
+| Custom profile images | `~/.local/share/brave-workspace-manager/images/` |
+| Log | `~/.local/state/brave-workspace-manager/` |
+| Configuration | `~/.config/brave-workspace-manager/` |
+| Autostart | `~/.config/autostart/brave-workspace-manager.desktop` |
 
-Todo lo anterior se puede borrar sin tocar los datos de Brave.
+All of the above can be deleted without touching Brave's data. The database
+schema is migrated automatically when a new version adds columns.
 
-## Estructura del proyecto
+## Project structure
 
 ```
 brave_workspace_manager/
-├── config.py            rutas, deteccion del escritorio, binarios de Brave
-├── models.py            perfiles, ventanas y metodos de asociacion
-├── discovery.py         lectura de Local State y carpetas de perfil
-├── processes.py         inspeccion de /proc y perfiles abiertos
-├── database.py          persistencia SQLite
-├── a11y_helper.py       lectura de pestanas por AT-SPI (script autonomo)
-├── tabs.py              cliente del ayudante y emparejamiento con las ventanas
+├── config.py            paths, desktop detection, Brave binaries
+├── models.py            profiles, windows and matching methods
+├── discovery.py         reading Local State and profile folders
+├── processes.py         /proc inspection and open profiles
+├── database.py          SQLite persistence and migrations
+├── i18n.py              translation layer
+├── locales/             en.json, es.json
+├── a11y_helper.py       tab reading through AT-SPI (standalone script)
+├── tabs.py              helper client and matching with windows
 ├── core/
-│   ├── controller.py    estado de la aplicacion y acciones
-│   ├── resolver.py      cascada de reglas ventana -> perfil
-│   ├── launcher.py      apertura de perfiles con el directorio nativo
-│   └── autostart.py     fichero .desktop de inicio automatico
+│   ├── controller.py    application state and actions
+│   ├── resolver.py      window -> profile rule cascade
+│   ├── launcher.py      opening profiles with their native folder
+│   └── autostart.py     autostart .desktop file
 ├── x11/
-│   ├── backend.py       protocolo EWMH con python-xlib
-│   ├── wmctrl_backend.py  alternativa mediante la CLI de wmctrl
-│   ├── grab.py          capturas de teclado para atajos globales
-│   └── base.py          interfaz comun de backends
-└── ui/                  interfaz PySide6 (galeria, paneles, bandeja, tema)
+│   ├── backend.py       EWMH protocol with python-xlib
+│   ├── wmctrl_backend.py  fallback through the wmctrl CLI
+│   ├── grab.py          keyboard grabs for global shortcuts
+│   └── base.py          common backend interface
+└── ui/                  PySide6 interface (gallery, cards, admin panel, tray, theme)
 ```
 
-Mas detalle en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) y la especificacion
-original en [docs/SPECIFICATION.md](docs/SPECIFICATION.md).
+More detail in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and the original
+requirements in [docs/SPECIFICATION.md](docs/SPECIFICATION.md).
 
-## Desarrollo y pruebas
+## Development and tests
 
 ```bash
-.venv/bin/python -m pytest -q        # 96 pruebas, sin necesidad de navegador abierto
-.venv/bin/python -m pytest --cov     # con cobertura
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q   # 123 tests, no browser needed
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest --cov=brave_workspace_manager
+ruff check
+ruff format --check
 ```
 
-Las pruebas no tocan los datos reales de Brave: construyen un directorio de
-datos sintetico en un temporal.
+The tests never touch real Brave data: they build a synthetic data directory
+in a temporary folder.
 
-Generar las capturas de la documentacion:
+Regenerate the documentation screenshots (synthetic data only):
 
 ```bash
 .venv/bin/python tools/screenshot.py
 ```
 
-## Licencia
+It writes `docs/images/main-window.png`, `docs/images/main-window-es.png` and
+`docs/images/unassigned-card.png`.
 
-MIT. Consulta [LICENSE](LICENSE).
+See [CONTRIBUTING.md](CONTRIBUTING.md) before sending a change.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

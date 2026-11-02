@@ -1,246 +1,320 @@
-# Arquitectura
+# Architecture
 
-Documento de diseño de **Brave Workspace Manager**: que hace cada modulo, como
-se relacionan entre si y, sobre todo, por que la asociacion entre ventanas y
-perfiles funciona como funciona.
+Design document for **Brave Workspace Manager**: what each module does, how
+they relate to each other and, above all, why matching windows to profiles
+works the way it does.
 
-## 1. Panorama general
+## 1. Overview
 
 ```
                      ┌──────────────────────────────┐
-                     │          interfaz             │
+                     │          interface           │
                      │  ui/main_window.py           │
                      │  ui/profile_gallery.py       │
                      │  ui/profile_tab.py           │
-                     │  ui/window_panel.py          │
+                     │  ui/unassigned_card.py       │
                      │  ui/admin_panel.py           │
                      │  ui/tray.py  ui/icons.py     │
                      └───────────────┬──────────────┘
-                                     │ señales Qt
+                                     │ Qt signals
                      ┌───────────────▼──────────────┐
                      │  core/controller.py          │
-                     │  (estado y acciones)         │
-                     └───┬────────────┬──────────┬───┘
+                     │  (state and actions)         │
+                     └───┬────────────┬──────────┬──┘
                          │            │          │
-        ┌────────────────▼──┐  ┌──────▼──────┐  ┌▼───────────────┐
-        │ discovery.py       │  │ processes.py │  │ core/resolver.py│
-        │ perfiles nativos   │  │ /proc, fds   │  │ ventana→perfil  │
-        └────────────────────┘  └──────┬──────┘  └────────────────┘
-                                        │
-                     ┌──────────────────▼──────────────────┐
+        ┌────────────────▼──┐  ┌──────▼──────┐  ┌▼────────────────┐
+        │ discovery.py      │  │ processes.py│  │ core/resolver.py│
+        │ native profiles   │  │ /proc, fds  │  │ window→profile  │
+        └───────────────────┘  └──────┬──────┘  └─────────────────┘
+                                      │
+                     ┌────────────────▼────────────────────┐
                      │  x11/  (backend.py, wmctrl, grab)   │
-                     │  base.py (protocolo comun)           │
+                     │  base.py (common protocol)          │
                      └─────────────────────────────────────┘
 
-        ┌────────────────────┐        ┌────────────────────────┐
-        │ database.py        │        │ core/launcher.py       │
-        │ SQLite propio      │        │ Brave --profile-directory │
-        └────────────────────┘        └────────────────────────┘
+        ┌────────────────────┐        ┌───────────────────────────┐
+        │ database.py        │        │ core/launcher.py          │
+        │ own SQLite         │        │ Brave --profile-directory │
+        └────────────────────┘        └───────────────────────────┘
 
         ┌────────────────────┐        ┌────────────────────────┐
         │ tabs.py            │        │ a11y_helper.py         │
-        │ cliente + emparejado│       │ lector AT-SPI (JSON)   │
+        │ client + matching  │        │ AT-SPI reader (JSON)   │
         └────────────────────┘        └────────────────────────┘
+
+        ┌────────────────────────────────────────────┐
+        │ i18n.py + locales/*.json (translations)    │
+        └────────────────────────────────────────────┘
 ```
 
-El controlador (`core/controller.py`) es el unico que conoce el estado
-completo. La interfaz solo lee ese estado y llama a sus acciones; los modulos
-de bajo nivel (descubrimiento, procesos, resolucion, backends) no conocen
-PySide6 y se pueden probar de forma aislada.
+The controller (`core/controller.py`) is the only component that knows the
+whole state. The interface only reads that state and calls its actions; the
+low-level modules (discovery, processes, resolution, backends, translations)
+do not know about PySide6 and can be tested in isolation.
 
-## 2. Ciclo de actualizacion
+## 2. Refresh cycle
 
-Un temporizador de Qt (2 s por defecto, configurable) dispara `refresh()`:
+A Qt timer (2 s by default, configurable) triggers `refresh()`:
 
-1. `discovery.discover_profiles()` lee `Local State` y las carpetas de perfil;
-   devuelve nombre visible, avatar y orden.
-2. Se fusiona con la configuracion guardada en SQLite (`_merge_profiles`): lo
-   que el usuario haya personalizado manda, lo demas se crea con valores por
-   defecto.
-3. `processes.scan_brave_processes()` recorre `/proc` y clasifica los procesos
-   de Brave por tipo (`browser`, `renderer`, `gpu-process`, ...).
-4. `processes.profile_dirs_in_use()` determina que perfiles estan **abiertos**
-   leyendo los descriptores de fichero abiertos por el proceso del navegador.
-5. `backend.list_windows()` enumera las ventanas de Brave via EWMH.
-6. `_learn_from_launch()` incorpora las asignaciones aprendidas en los
-   ultimos segundos.
-7. `resolver.resolve()` asocia cada ventana con un perfil y fija el metodo y
-   la confianza.
-8. Se emiten `profilesChanged` y `windowsChanged` y la interfaz se redibuja.
+1. `discovery.discover_profiles()` reads `Local State` and the profile
+   folders; it returns display name, avatar and order.
+2. The result is merged with the configuration saved in SQLite
+   (`_merge_profiles`): whatever the user customised wins, the rest is created
+   with default values. Virtual profiles (section 8) are kept even though
+   Brave does not report them.
+3. `processes.scan_brave_processes()` walks `/proc` and classifies Brave's
+   processes by type (`browser`, `renderer`, `gpu-process`, ...).
+4. `processes.profile_dirs_in_use()` determines which profiles are **open**
+   by reading the file descriptors held by the browser process.
+5. `backend.list_windows()` lists Brave's windows through EWMH.
+6. `_learn_from_launch()` incorporates the assignments learned in the last
+   few seconds.
+7. `resolver.resolve()` matches each window with a profile and sets the
+   method and confidence.
+8. `profilesChanged` and `windowsChanged` are emitted and the interface
+   redraws.
 
-## 3. El problema de la asociacion ventana-perfil
+## 3. The window-to-profile matching problem
 
-Es el punto mas delicate de la especificacion (apartado 4 del SRS) y se ha
-estudiado empiricamente sobre Linux Mint 22.3 / Cinnamon antes de escribir
-nada de codigo. Los resultados:
+This is the most delicate point of the specification (section 4 of the SRS)
+and it was studied empirically on Linux Mint 22.3 / Cinnamon before writing
+any code. The findings:
 
-| Hipotesis | Resultado |
+| Hypothesis | Result |
 |---|---|
-| El PID de la ventana identifica el perfil | **Falso.** Todas las ventanas de todos los perfiles de un mismo `user-data-dir` comparten un unico proceso del navegador, asi que `_NET_WM_PID` es identico para todas. |
-| Alguna propiedad X11 indica el perfil | **Falso.** Se revisaron `_NET_WM_*`, `WM_CLASS`, `WM_CLIENT_MACHINE`, `WM_WINDOW_ROLE` y similares: ninguna contiene el directorio ni el nombre del perfil. |
-| Los argumentos de `/proc/<pid>/cmdline` identifican el perfil | **Parcial.** El proceso del navegador conserva `--profile-directory`, pero es el mismo para todas las ventanas, y Chromium **reescribe el titulo** de sus procesos secundarios, de modo que `cmdline` llega como una unica cadena con espacios. |
-| `brave --profile-directory=X` enfoca la ventana existente | **Falso.** Chromium abre una **ventana nueva** en ese perfil, aunque el perfil ya estuviera abierto. Por eso la app activa la ventana que ya conoce y solo lanza cuando no hay ninguna. |
-| Los ficheros abiertos por el proceso revelan los perfiles activos | **Verdadero.** El proceso del navegador mantiene descriptores dentro de `<user-data-dir>/<Perfil>/`. Es la senal fiable que se usa. |
-| `_NET_WM_USER_TIME` permite saber cual es la ventana reciente | **Descartado.** Es tiempo del servidor X, no tiempo Unix; no es comparable con marcas de tiempo del sistema. |
+| The window PID identifies the profile | **False.** All windows of all profiles in the same `user-data-dir` share a single browser process, so `_NET_WM_PID` is identical for all of them. |
+| Some X11 property indicates the profile | **False.** `_NET_WM_*`, `WM_CLASS`, `WM_CLIENT_MACHINE`, `WM_WINDOW_ROLE` and similar were checked: none contains the profile folder or name. |
+| The arguments in `/proc/<pid>/cmdline` identify the profile | **Partial.** The browser process keeps `--profile-directory`, but it is the same for every window, and Chromium **rewrites the title** of its child processes, so `cmdline` arrives as a single space-separated string. |
+| `brave --profile-directory=X` focuses the existing window | **False.** Chromium opens a **new window** in that profile, even if it was already open. That is why the app activates the window it already knows and only launches when there is none. |
+| The files held open by the process reveal the active profiles | **True.** The browser process keeps descriptors inside `<user-data-dir>/<Profile>/`. This is the reliable signal used. |
+| `_NET_WM_USER_TIME` tells which window is the most recent | **Discarded.** It is X server time, not Unix time; it cannot be compared with system timestamps. |
 
-### Cascada de reglas
+### Rule cascade
 
-`core/resolver.py` aplica las reglas en orden y la primera que encaja fija el
-metodo y la confianza:
+`core/resolver.py` applies the rules in order and the first one that matches
+sets the method and confidence:
 
-| # | Metodo | Confianza | Condicion |
+| # | Method | Confidence | Condition |
 |---|---|---|---|
-| 1 | `LEARNED` | 1.0 | La ventana (id + PID) tiene una asignacion guardada en SQLite. |
-| 2 | `MANUAL` | 1.0 | El usuario la asigno a mano; nunca se degrada. |
-| 3 | `SINGLE_PROFILE` | 0.9 | Solo hay un perfil abierto: todas las ventanas de Brave le pertenecen. |
-| 4 | `TITLE` | 0.6 | El nombre del perfil aparece como palabra completa en el titulo. |
-| 5 | `ELIMINATION` | 0.5 | Queda una sola ventana sin asignar y un solo perfil abierto sin ventanas. |
-| 6 | `NONE` | 0.0 | No se puede resolver: la ventana aparece en «Ventanas sin asignar». |
+| 1 | `LEARNED` | 1.0 | The window (id + PID) has an assignment saved in SQLite. |
+| 2 | `MANUAL` | 1.0 | The user assigned it by hand; it is never downgraded. |
+| 3 | `SINGLE_PROFILE` | 0.9 | Only one profile is open: every Brave window belongs to it. |
+| 4 | `TITLE` | 0.6 | The profile name appears as a whole word in the title. |
+| 5 | `ELIMINATION` | 0.5 | Exactly one window is unassigned and exactly one open profile has no windows. |
+| 6 | `NONE` | 0.0 | Cannot be resolved: the window goes to the **Unassigned windows** card. |
 
-La regla 4 usa una expresion regular con limites de palabra
-(`(?<![\w])nombre(?![\w])`) para que `Work` no case con `WorkX`.
+Rule 4 uses a regular expression with word boundaries
+(`(?<![\w])name(?![\w])`) so that `Work` does not match `WorkX`.
 
-### Aprendizaje
+### Learning
 
-- **Por lanzamiento**: al abrir un perfil desde la app se guarda el conjunto de
-  ventanas anteriores; la ventana nueva que aparezca (preferentemente la que
-  queda activa) se asocia al perfil lanzado y se guarda con metodo `learned`.
-  La ventana queda marcada durante 20 s (`LAUNCH_LEARNING_SECONDS`).
-- **Manual**: el desplegable de cada tarjeta sin asignar, o el boton «Tomar la
-  ventana activa», guardan la asignacion con metodo `manual`.
+- **On launch**: when a profile is opened from the app, the set of existing
+  windows is recorded; the new window that appears (preferably the one that
+  becomes active) is matched with the launched profile and saved with method
+  `learned`. The window stays marked for 20 s (`LAUNCH_LEARNING_SECONDS`).
+- **Manual**: the **Assign to profile…** drop-down of the Unassigned windows
+  card, the **Take the active window** entry of a card's context menu, and
+  **Save as new profile** save the assignment with method `manual`.
 
-Las asignaciones se indexan por `(window_id, browser_pid)`, de modo que
-reaparecen al volver a abrir el mismo perfil en una sesion posterior.
+Assignments are indexed by `(window_id, browser_pid)`, so they reappear when
+the same profile is opened again in a later session.
 
-## 4. Lectura de las pestanas abiertas
+## 4. Reading open tabs
 
-Chromium no expone por X11/EWMH el numero de pestanas de una ventana: por ese
-protocolo solo se obtiene el titulo de la ventana, que es el de la pestana
-activa. La unica via local que no toca los datos del navegador es el **arbol de
-accesibilidad** (AT-SPI), el mismo que consumen los lectores de pantalla.
+Chromium does not expose the number of tabs of a window through X11/EWMH:
+that protocol only provides the window title, which is the title of the
+active tab. The only local route that does not touch the browser's data is
+the **accessibility tree** (AT-SPI), the same one screen readers consume.
 
-El flujo tiene tres piezas:
+The flow has three pieces:
 
-| Pieza | Fichero | Que hace |
+| Piece | File | What it does |
 |---|---|---|
-| Lector | `a11y_helper.py` | Script autonomo (no importa el paquete) que recorre el escritorio AT-SPI, busca las ventanas de Brave y devuelve un JSON con sus pestanas. |
-| Cliente | `tabs.py` | Ejecuta el lector en un subproceso, prueba el interprete del entorno virtual y despues `/usr/bin/python3`, y empareja cada ventana con su frame por titulo normalizado y, si hace falta, por solape de geometria. |
-| Estado | `core/controller.py` | Reparte los titulos leidos entre las ventanas y los perfiles y publica el aviso cuando la lectura no es posible. |
+| Reader | `a11y_helper.py` | Standalone script (does not import the package) that walks the AT-SPI desktop, finds Brave's windows and returns JSON with their tabs. |
+| Client | `tabs.py` | Runs the reader in a subprocess, trying the virtual environment's interpreter first and then `/usr/bin/python3`, and matches each window with its frame by normalised title and, if needed, by geometry overlap. |
+| State | `core/controller.py` | Distributes the titles among windows and profiles and publishes a warning when reading is not possible. |
 
-Detalles que condicionan el diseno:
+Details that shape the design:
 
-- **Chromium solo publica su interfaz** (barra de pestanas incluida) si se abre
-  con `--force-renderer-accessibility`. Por eso `core/launcher.py` anade ese
-  flag a los perfiles que abre la app. Si el navegador ya estaba en marcha, el
-  flag no surte efecto: `processes.accesibilidad_activada()` lo detecta y la
-  interfaz explica que solo se ve la pestana activa.
-- **La franja de pestanas** aparece como `page tab list` con un `page tab` por
-  pestana; la que esta en primer plano lleva el estado `selected`. Chromium
-  deja ademas una franja vacia y oculta, que se descarta.
-- **El contenido de la pagina no se lee**: el lector no baja a los subarboles
-  `document web`, de modo que solo se obtiene el titulo de cada pestaña. No se
-  leen URLs, cookies, contrasenas ni historial, y esos titulos no se guardan.
-- **La lectura es un subproceso y un hilo**: `TabReaderThread` la ejecuta fuera
-  del hilo de la interfaz, con un intervalo de 10 s, para que la ventana no se
-  congele.
+- **Chromium only publishes its interface** (tab strip included) when started
+  with `--force-renderer-accessibility`. That is why `core/launcher.py` adds
+  the flag to the profiles the app opens. If the browser was already running,
+  the flag has no effect: `processes.accesibilidad_activada()` detects it and
+  the interface explains that only the active tab is visible.
+- **The tab strip** appears as a `page tab list` with one `page tab` per tab;
+  the one in the foreground has the `selected` state. Chromium also leaves an
+  empty, hidden strip, which is discarded.
+- **Page content is not read**: the reader does not descend into
+  `document web` subtrees, so only each tab's title is obtained. No URLs,
+  cookies, passwords or history are read, and the titles are not stored.
+- **Reading happens in a subprocess and a thread**: `TabReaderThread` runs it
+  outside the interface thread, every 10 s, so the window does not freeze.
 
-## 5. Backends de ventanas
+## 5. Window backends
 
-`x11/base.py` define el protocolo `WindowBackend` y `x11/__init__.py` elige la
-implementacion disponible:
+`x11/base.py` defines the `WindowBackend` protocol and `x11/__init__.py`
+picks the available implementation:
 
-| Backend | Cuando se usa | Notas |
+| Backend | When it is used | Notes |
 |---|---|---|
-| `X11Backend` | Sesion X11 con `python-xlib` instalado | Preferido: no depende de binarios externos. Usa `_NET_CLIENT_LIST`, `_NET_WM_PID`, `_NET_WM_NAME`, `WM_CLASS` y `_NET_WM_STATE`. |
-| `WmctrlBackend` | X11 sin python-xlib o con fallo del anterior | Envuelve `wmctrl -lp -x`. |
-| `NullBackend` | Wayland o sin soporte | La app sigue funcionando: descubre perfiles y los abre, pero no enumera ventanas. |
+| `X11Backend` | X11 session with `python-xlib` installed | Preferred: no external binaries. Uses `_NET_CLIENT_LIST`, `_NET_WM_PID`, `_NET_WM_NAME`, `WM_CLASS` and `_NET_WM_STATE`. |
+| `WmctrlBackend` | X11 without python-xlib, or when the former fails | Wraps `wmctrl -lp -x`. |
+| `NullBackend` | Wayland or no support | The app keeps working: it discovers and opens profiles, but does not list windows. |
 
-Las acciones de activar y minimizar se hacen con `ClientMessage` de EWMH
-(`_NET_ACTIVE_WINDOW` y `_NET_WM_STATE`), que es lo que espera Muffin/Cinnamon.
+`X11Backend` performs window actions with EWMH `ClientMessage`s, which is
+what Muffin/Cinnamon expects:
 
-## 6. Atajos globales
+| Action | `X11Backend` | `WmctrlBackend` |
+|---|---|---|
+| Activate | `_NET_ACTIVE_WINDOW` | `wmctrl -i -a` |
+| Minimise / restore | `_NET_WM_STATE_HIDDEN` | `xdotool windowminimize` / `windowmap windowraise` (needs `xdotool`) |
+| Maximise / restore size | `_NET_WM_STATE_MAXIMIZED_VERT` + `_NET_WM_STATE_MAXIMIZED_HORZ` | `wmctrl -b add/remove,maximized_vert,maximized_horz` |
+| Close | `WM_PROTOCOLS` / `WM_DELETE_WINDOW` | `wmctrl -i -c` |
 
-`x11/grab.py` monta un hilo con capturas pasivas de teclado (`grab_key`) sobre
-la ventana raiz de X11. Si la combinacion ya esta ocupada por otra aplicacion,
-el servidor responde `BadAccess`; la app lo detecta, lo comunica por el estado
-y deja ese atajo desactivado en lugar de fallar. Los atajos que funcionan con
-la ventana enfocada se registran ademas como `QShortcut` locales, de modo que
-siguen siendo utilizables aunque la captura global falle.
+Closing is always a polite request, equivalent to clicking the window's close
+button: Brave can still ask for confirmation, and no process is ever killed.
 
-## 7. Persistencia
+## 6. Global shortcuts
 
-SQLite en `~/.local/share/brave-workspace-manager/workspace.db`:
+`x11/grab.py` runs a thread with passive keyboard grabs (`grab_key`) on the
+X11 root window. If the combination is already taken by another application,
+the server answers `BadAccess`; the app detects it, reports it in the status
+bar and leaves that shortcut disabled instead of failing. Shortcuts are also
+registered as local `QShortcut`s, so they remain usable while the window has
+focus even if the global grab fails.
 
-| Tabla | Contenido |
+The default shortcuts are `Ctrl+Alt+1`…`9` (profile N in gallery order),
+`Ctrl+Alt+Tab` and `Ctrl+Alt+Shift+Tab` (next / previous profile).
+
+## 7. Persistence
+
+SQLite in `~/.local/share/brave-workspace-manager/workspace.db`:
+
+| Table | Contents |
 |---|---|
-| `profiles` | `id`, `directory_name`, `display_name`, `color`, `icon`, `sort_order`, `is_favorite`, marcas de tiempo. |
-| `window_assignments` | `window_id`, `browser_pid`, `profile_id`, `title`, `method`, marca de tiempo. Clave primaria compuesta `(window_id, browser_pid)`. |
-| `settings` | Preferencias de la aplicacion en pares clave/valor (intervalo de refresco, atajos, bandeja, inicio automatico, lectura de pestanas). |
+| `profiles` | `id`, `directory_name`, `display_name`, `color`, `icon`, `sort_order`, `is_favorite`, `custom_image`, `is_virtual`, timestamps. |
+| `window_assignments` | `window_id`, `browser_pid`, `profile_id`, `title`, `method`, timestamp. Composite primary key `(window_id, browser_pid)`. |
+| `settings` | Application preferences as key/value pairs (refresh interval, activate on click, shortcuts, tray, autostart, tab reading, `language`). |
 
-El acceso es seguro entre hilos (`RLock` + `check_same_thread=False`) porque
-el hilo de capturas de teclado tambien consulta ajustes.
+Access is thread-safe (`RLock` + `check_same_thread=False`) because the
+keyboard grab thread also reads settings.
 
-## 8. Modelo de seguridad
+**Migrations**: `Database.migrate()` runs on every start. It creates missing
+tables and `_add_missing_columns()` adds the columns introduced after the
+first release (`custom_image`, `is_virtual`) with `ALTER TABLE`, so existing
+databases are upgraded in place without losing data.
 
-- **Solo lectura** sobre el directorio de datos de Brave. No se escribe nunca
-  en `Local State` ni en las bases de datos de los perfiles.
-- No se leen cookies, contrasenas, tokens, historial ni URLs.
-- De la barra de pestanas solo se lee el **titulo** de cada pestaña, en memoria:
-  no se persiste ni se transmite, y se puede desactivar por completo con el
-  ajuste «Listar las pestanas abiertas».
-- No se intercepta trafico ni se instalan certificados.
-- Crear o renombrar perfiles se delega en el gestor nativo de Brave
-  (`brave://settings/manageProfile`); la app solo guarda el **nombre visible**
-  en su propia base de datos, no en la de Brave.
-- Los perfiles se abren siempre con su directorio nativo, evitando instancias
-  concurrentes sobre el mismo perfil.
-- La aplicacion no necesita privilegios especiales: todo vive en el `$HOME` del
-  usuario.
+**Custom images**: `AppController.set_profile_image()` accepts `.png`,
+`.jpg`, `.jpeg`, `.webp`, `.bmp` and `.gif`, copies the file to
+`~/.local/share/brave-workspace-manager/images/<profile-id>.<ext>` and stores
+that path in `custom_image`. Replacing or removing the image deletes the
+previous copy. The original file and Brave's own avatars are never modified.
 
-## 9. Interfaz
+## 8. Virtual profiles
 
-- `ui/theme.py` define la paleta oscura y la hoja de estilos completa.
-- `ui/icons.py` dibuja los iconos de forma procedural (16 glifos) y genera el
-  avatar de cada perfil a partir de su icono de Brave o de sus iniciales, de
-  modo que el repositorio no necesita recursos binarios.
-- `ui/main_window.py` monta la ventana principal: cabecera, zona de galeria,
-  divisor entre el panel de ventanas y el de administracion, y la barra de
-  estado con el backend activo.
-- `ui/profile_gallery.py` calcula la rejilla de perfiles: reparte las fichas en
-  columnas segun el ancho disponible, las centra y mantiene el resumen a la
-  izquierda siempre visible.
-- `ui/profile_tab.py` dibuja la ficha de un perfil (avatar, nombre, estado y
-  marca de favorito) dentro de la galeria.
-- `ui/admin_panel.py` contiene la tabla de perfiles, el formulario de
-  personalizacion, la tabla de atajos y los ajustes.
-- `ui/tray.py` ofrece el icono de bandeja con acceso rapido a los perfiles.
+A Brave window that cannot be attributed can be turned into a **virtual
+profile** with **Save as new profile** (`AppController.save_window_as_profile`).
+It is a row in the app's `profiles` table with `is_virtual = 1` and an id of
+the form `virtual-N`, plus a `manual` assignment of that window. It exists
+only in the app's database: nothing is created in Brave.
 
-## 10. Modo degradado y fallos previstos
+Virtual profiles are shown, customised, reordered and activated like any
+other profile, and count as open while they own a window. They cannot be
+launched (`launch_profile` refuses and reports why) because there is no Brave
+profile folder to pass to `--profile-directory`.
 
-| Situacion | Comportamiento |
+## 9. Internationalisation
+
+`i18n.py` loads flat JSON catalogues from `locales/` (`en.json`, `es.json`),
+one per language, mapping keys to texts with `str.format` placeholders.
+
+- `tr(key, **values)` returns the text in the active language, falls back to
+  English when the key is missing, and to the key itself as a last resort.
+- `available_languages()` lists the catalogue files; each catalogue's
+  `language_name` key holds the language's own name, used in the selector.
+- Unknown codes fall back to the base language (`es_MX` → `es`) and then to
+  English.
+- The language is chosen, in order, from `--language`, the stored `language`
+  setting, and the system language (`LANG`/`LC_*`), falling back to English. The header selector changes it live (the main window
+  calls `retranslate()` on every widget that has one, then refreshes) and
+  saves it.
+- Adding a language means adding a catalogue file; no code changes.
+  `tests/test_i18n.py` checks that all catalogues have the same keys as
+  `en.json` and no empty texts.
+
+## 10. Security model
+
+- **Read-only** access to Brave's data directory. Nothing is ever written to
+  `Local State` or to the profile databases.
+- No cookies, passwords, tokens, history or URLs are read.
+- Only the **title** of each tab is read from the tab strip, in memory: it is
+  not persisted or transmitted, and it can be turned off completely with the
+  **List the open tabs** setting.
+- No traffic is intercepted and no certificates are installed.
+- Creating or renaming profiles in Brave is delegated to Brave's native
+  manager (`brave://settings/manageProfile`); the app only stores its own
+  **display name** in its own database, not in Brave's.
+- Custom images are copied into the app's own data directory.
+- Profiles are always opened with their native folder on the single Brave
+  instance, avoiding concurrent instances over the same profile.
+- Windows are closed politely; processes are never killed.
+- The application needs no special privileges: everything lives in the
+  user's `$HOME`.
+
+## 11. Interface
+
+- `ui/theme.py` defines the dark palette and the full stylesheet.
+- `ui/icons.py` draws icons procedurally (profile glyphs and the card action
+  icons) and builds each profile's avatar from its custom image, its Brave
+  avatar or its initials, so the repository needs no binary resources.
+- `ui/main_window.py` builds the main window: the header (title, language
+  selector, Refresh, Help), a splitter with the left column (summary on top,
+  administration panel below, both always visible) and the gallery on the
+  right, and the status bar with the active backend.
+- `ui/profile_gallery.py` contains `ProfileSummary` and `ProfileGallery`. The
+  gallery computes the responsive grid (columns depend on the available
+  width, the grid is centred), handles drag and drop reordering (it emits
+  `reordered`, which calls `AppController.reorder_profiles`) and always
+  places the Unassigned windows card last.
+- `ui/profile_tab.py` draws a profile card: colour strip, avatar or image,
+  name, status, number of windows and tabs (titles in the tooltip), favourite
+  mark, and the row of action buttons (activate, minimise/restore,
+  maximise/restore, close) that only appears when the profile has a window.
+  A "…" button with a per-window menu appears when it has more than one.
+- `ui/unassigned_card.py` is the final card: a window selector, **Save as new
+  profile**, **Assign to profile…**, and activate / minimise / close buttons.
+- `ui/admin_panel.py` contains the profiles table, the customisation form
+  (name, colour, icon, image, favourite, order, open, reset), the settings
+  and the shortcut table.
+- `ui/tray.py` provides the optional tray icon with quick access to profiles.
+
+## 12. Degraded mode and expected failures
+
+| Situation | Behaviour |
 |---|---|
-| Sesion Wayland | Backend `none`: se listan y abren perfiles, sin gestion de ventanas. |
-| `python-xlib` ausente | Backend `wmctrl` si existe el binario; si no, `none`. |
-| `wmctrl` y `python-xlib` ausentes | La app arranca igualmente y lo indica en la barra de estado. |
-| Brave no instalado | Se listan los perfiles existentes; el boton «Abrir perfil» avisa de que falta el ejecutable. |
-| Proceso de Brave que desaparece durante el recorrido | Se ignora sin abortar el refresco. |
-| Atajo global en conflicto | Se desactiva ese atajo y se avisa; el resto sigue funcionando. |
-| `python3-gi` ausente | No se puede leer el arbol de accesibilidad: se avisa y solo se muestra la pestana activa de cada ventana. |
-| Brave ya en marcha sin `--force-renderer-accessibility` | Se avisa de que hay que cerrar Brave del todo y abrir un perfil desde la app para listar las pestanas. |
+| Wayland session | Backend `none`: profiles are listed and opened, no window management. |
+| `python-xlib` missing | Backend `wmctrl` if the binary exists; otherwise `none`. |
+| Neither `wmctrl` nor `python-xlib` | The app starts anyway and says so in the status bar. |
+| Brave not installed | Existing profiles are listed; **Open profile** warns that the executable is missing. |
+| A Brave process disappears during the scan | Ignored without aborting the refresh. |
+| Global shortcut conflict | That shortcut is disabled and reported; the rest keep working. |
+| `python3-gi` missing | The accessibility tree cannot be read: a warning is shown and only each window's active tab is visible. |
+| Brave already running without `--force-renderer-accessibility` | A warning explains that Brave must be closed completely and a profile opened from the app to list the tabs. |
+| Launching a virtual profile | Refused with a status message; it has no Brave folder. |
+| Unsupported or unreadable image file | The image is not changed and a status message is shown. |
 
-## 11. Limitaciones conocidas y trabajo futuro
+## 13. Known limitations and future work
 
-- La agrupacion exacta de ventanas por perfil no es posible cuando varios
-  perfiles estan abiertos y ninguno se ha lanzado desde la app: en ese caso
-  las ventanas quedan en «Ventanas sin asignar» hasta que se resuelven a mano
-  o se vuelven a lanzar desde la aplicacion.
-- Las pestanas se listan por su titulo, no por su URL: leer las URLs exigiria
-  abrir un puerto de depuracion de Chromium, que daria acceso a cookies y
-  credenciales de cualquier proceso local, y parsear los ficheros de sesion de
-  Chromium, que tambien las contienen. Ambas vias se descartan a proposito.
-- El recuento depende de que el navegador se haya abierto con el modo de
-  accesibilidad: si Brave estaba en marcha antes de usar la aplicacion, solo
-  se ve la pestana activa.
-- No hay soporte de Wayland mas alla del modo degradado.
-- El panel de administracion es funcional pero basico; el arbol de perfiles y
-  la previsualizacion de pestañas quedan para fases posteriores.
+- Exact grouping of windows by profile is not possible when several profiles
+  are open and none was launched from the app: those windows stay on the
+  Unassigned windows card until they are resolved by hand or relaunched from
+  the application.
+- Tabs are listed by title, not URL: reading URLs would require opening a
+  Chromium debugging port, which would give any local process access to
+  cookies and credentials, or parsing Chromium's session files, which contain
+  them as well. Both routes are rejected on purpose.
+- The tab count depends on the browser having been opened in accessibility
+  mode: if Brave was running before the app was used, only the active tab is
+  visible.
+- No Wayland support beyond degraded mode.
+- Tab previews and a profile tree are left for later phases.

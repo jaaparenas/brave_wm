@@ -1,4 +1,4 @@
-"""Inspeccion de los procesos de Brave mediante /proc."""
+"""Inspection of the Brave processes through /proc."""
 
 from __future__ import annotations
 
@@ -41,12 +41,12 @@ def _looks_like_brave(pid: int, cmdline: list[str]) -> bool:
 
 
 def _flag(cmdline: list[str], name: str) -> str | None:
-    """Extrae un flag de la linea de comandos.
+    """Extracts a flag from the command line.
 
-    Chromium reescribe el titulo de sus procesos secundarios, de modo que
-    /proc/<pid>/cmdline llega como una unica cadena con espacios en lugar de
-    argumentos separados; por eso se busca primero en los argumentos sueltos y
-    despues, como ultimo recurso, sobre el texto completo.
+    Chromium rewrites the title of its child processes, so /proc/<pid>/cmdline
+    may arrive as a single space separated string instead of separate
+    arguments; the flag is looked up in the arguments first and then, as a
+    last resort, in the whole text.
     """
     for index, argument in enumerate(cmdline):
         if argument.startswith(f"--{name}="):
@@ -69,7 +69,7 @@ def _process_kind(cmdline: list[str]) -> str:
 
 
 def scan_brave_processes() -> list[BrowserProcess]:
-    """Procesos de Brave vivos; los que desaparecen durante el recorrido se ignoran."""
+    """Live Brave processes; those that vanish during the scan are ignored."""
     processes: list[BrowserProcess] = []
     try:
         pids = [int(entry) for entry in os.listdir("/proc") if entry.isdigit()]
@@ -112,16 +112,16 @@ def browser_processes(processes: Iterable[BrowserProcess]) -> list[BrowserProces
 
 
 def accesibilidad_activada(processes: Iterable[BrowserProcess]) -> bool:
-    """True si algun proceso del navegador se abrio con el modo de accesibilidad."""
+    """True when a browser process was started with accessibility mode."""
     return any(accesibilidad_por_pid(processes).values())
 
 
 def accesibilidad_por_pid(processes: Iterable[BrowserProcess]) -> dict[int, bool]:
-    """Que proceso del navegador se abrio con el modo de accesibilidad.
+    """Which browser processes were started with accessibility mode.
 
-    Chromium solo publica su interfaz por AT-SPI cuando se arranca con
-    ``--force-renderer-accessibility``; si el navegador ya estaba en marcha, el
-    proceso no lo lleva y sus ventanas no muestran mas que la pestana activa.
+    Chromium only publishes its interface through AT-SPI when it starts with
+    ``--force-renderer-accessibility``; if the browser was already running the
+    process lacks it and its windows only expose the active tab.
     """
     resultado: dict[int, bool] = {}
     for proceso in processes:
@@ -142,7 +142,7 @@ def _flag_accesibilidad(cmdline: list[str]) -> bool:
 def match_profile_directory(
     target: str, user_data_dir: Path, known_profiles: set[str]
 ) -> str | None:
-    """Nombre del perfil al que pertenece una ruta, si es un perfil conocido."""
+    """Name of the profile a path belongs to, when it is a known profile."""
     prefix = str(Path(user_data_dir)) + os.sep
     if not target.startswith(prefix):
         return None
@@ -153,11 +153,11 @@ def match_profile_directory(
 def profile_dirs_in_use(
     pids: Iterable[int], user_data_dir: Path, known_profiles: set[str]
 ) -> set[str]:
-    """Perfiles que el proceso de Brave tiene abiertos (ficheros abiertos en la carpeta).
+    """Profiles the Brave process has open (files open inside their folder).
 
-    Chromium mantiene el perfil cargado en el proceso raiz, de modo que los
-    descriptores abiertos al directorio del perfil revelan que perfiles estan
-    activos, sin depender de titulos de ventana.
+    Chromium keeps loaded profiles in the root process, so the descriptors
+    open in a profile directory reveal which profiles are active, without
+    relying on window titles.
     """
     found: set[str] = set()
     for pid in pids:
@@ -178,5 +178,5 @@ def profile_dirs_in_use(
 
 
 def window_pids(processes: Iterable[BrowserProcess]) -> set[int]:
-    """PIDs que pueden ser proprietarios de ventanas de Brave."""
+    """PIDs that may own Brave windows."""
     return {process.pid for process in processes}

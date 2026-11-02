@@ -1,4 +1,4 @@
-"""Rutas, deteccion del entorno de escritorio y localizacion de binarios."""
+"""Paths, desktop environment detection and binary lookup."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from pathlib import Path
 
 APP_ID = "brave-workspace-manager"
 APP_NAME = "Brave Workspace Manager"
-APP_VERSION = "1.0.0"
-APP_SUMMARY = "Administrador de perfiles nativos de Brave para Linux Mint / Cinnamon"
+APP_VERSION = "1.1.0"
+APP_SUMMARY = "Native Brave profile manager for Linux Mint / Cinnamon"
 
 DEFAULT_BRAVE_DIR = Path.home() / ".config" / "BraveSoftware" / "Brave-Browser"
 
@@ -45,7 +45,7 @@ XDG_STATE_HOME = _xdg("XDG_STATE_HOME", ".local/state")
 
 
 def brave_user_data_dir() -> Path:
-    """Directorio raiz de datos de Brave (contiene Local State y los perfiles)."""
+    """Root data directory of Brave (holds Local State and the profiles)."""
     override = os.environ.get("BRAVE_USER_DATA_DIR")
     if override:
         return Path(override).expanduser()
@@ -73,7 +73,7 @@ def log_path() -> Path:
 
 
 def find_brave_binary() -> str | None:
-    """Ruta absoluta del ejecutable de Brave, o None si no esta instalado."""
+    """Absolute path of the Brave executable, or None when it is not installed."""
     for name in _BRAVE_BINARIES:
         found = shutil.which(name)
         if found:

@@ -1,4 +1,4 @@
-"""Panel de administracion: perfiles, personalizacion, atajos y ajustes."""
+"""Admin panel: profiles, customisation, shortcuts and settings."""
 
 from __future__ import annotations
 
@@ -24,22 +24,22 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..i18n import tr
 from ..models import Profile
 from . import icons
 
 SHORTCUT_ACTIONS = (
-    ("profile-1", "Activar perfil 1"),
-    ("profile-2", "Activar perfil 2"),
-    ("profile-3", "Activar perfil 3"),
-    ("profile-4", "Activar perfil 4"),
-    ("profile-5", "Activar perfil 5"),
-    ("profile-6", "Activar perfil 6"),
-    ("profile-7", "Activar perfil 7"),
-    ("profile-8", "Activar perfil 8"),
-    ("profile-9", "Activar perfil 9"),
-    ("next-profile", "Perfil siguiente"),
-    ("prev-profile", "Perfil anterior"),
-    ("toggle-admin", "Mostrar u ocultar el administrador"),
+    ("profile-1", "shortcut.profile.1"),
+    ("profile-2", "shortcut.profile.2"),
+    ("profile-3", "shortcut.profile.3"),
+    ("profile-4", "shortcut.profile.4"),
+    ("profile-5", "shortcut.profile.5"),
+    ("profile-6", "shortcut.profile.6"),
+    ("profile-7", "shortcut.profile.7"),
+    ("profile-8", "shortcut.profile.8"),
+    ("profile-9", "shortcut.profile.9"),
+    ("next-profile", "shortcut.next-profile"),
+    ("prev-profile", "shortcut.prev-profile"),
 )
 
 DEFAULT_SHORTCUTS = {
@@ -54,31 +54,11 @@ DEFAULT_SHORTCUTS = {
     "profile-9": "Ctrl+Alt+9",
     "next-profile": "Ctrl+Alt+Tab",
     "prev-profile": "Ctrl+Alt+Shift+Tab",
-    "toggle-admin": "Ctrl+Alt+B",
-}
-
-ICON_LABELS = {
-    "circle": "Circulo",
-    "star": "Estrella",
-    "heart": "Corazon",
-    "bolt": "Rayo",
-    "globe": "Globo",
-    "code": "Codigo",
-    "briefcase": "Maletin",
-    "home": "Casa",
-    "book": "Libro",
-    "gear": "Engranaje",
-    "leaf": "Hoja",
-    "flame": "Llama",
-    "sun": "Sol",
-    "moon": "Luna",
-    "user": "Persona",
-    "folder": "Carpeta",
 }
 
 
 class AdminPanel(QWidget):
-    """Edicion de perfiles y configuracion general."""
+    """Profile edition and general settings."""
 
     selectionChanged = Signal(str)
     renameRequested = Signal(str, str)
@@ -92,6 +72,8 @@ class AdminPanel(QWidget):
     settingChanged = Signal(str, str)
     shortcutChanged = Signal(str, str)
     shortcutResetRequested = Signal()
+    imageRequested = Signal(str)
+    imageCleared = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -105,6 +87,7 @@ class AdminPanel(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         content = QWidget()
         self._layout = QVBoxLayout(content)
         self._layout.setContentsMargins(0, 0, 8, 0)
@@ -119,43 +102,43 @@ class AdminPanel(QWidget):
         scroll.setWidget(content)
         root.addWidget(scroll)
 
-    # ------------------------------------------------------------- construccion
+    # ------------------------------------------------------------- building
 
     def _build_profiles_group(self) -> QWidget:
-        box = QGroupBox("Perfiles detectados")
+        box = QGroupBox()
         box.setObjectName("Card")
+        self._profiles_box = box
         layout = QVBoxLayout(box)
         layout.setContentsMargins(12, 12, 12, 12)
 
-        self._table = QTableWidget(0, 4)
-        self._table.setHorizontalHeaderLabels(["Perfil", "Carpeta", "Estado", "Ventanas"])
+        self._table = QTableWidget(0, 5)
         self._table.verticalHeader().setVisible(False)
         self._table.setSelectionBehavior(QTableWidget.SelectRows)
         self._table.setSelectionMode(QTableWidget.SingleSelection)
         self._table.setEditTriggers(QTableWidget.NoEditTriggers)
         header = self._table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setMinimumSectionSize(48)
         self._table.setMinimumHeight(220)
         self._table.itemSelectionChanged.connect(self._on_table_selection)
         layout.addWidget(self._table)
 
         buttons = QHBoxLayout()
-        manage = QPushButton("Gestor de perfiles de Brave")
-        manage.setToolTip(
-            "Abre el gestor nativo de Brave; la aplicacion no escribe en sus bases de datos"
-        )
-        manage.clicked.connect(self.manageProfilesRequested.emit)
-        buttons.addWidget(manage)
+        self._manage_button = QPushButton()
+        self._manage_button.clicked.connect(self.manageProfilesRequested.emit)
+        buttons.addWidget(self._manage_button)
         buttons.addStretch(1)
         layout.addLayout(buttons)
         return box
 
     def _build_editor_group(self) -> QWidget:
-        box = QGroupBox("Personalizacion del perfil")
+        box = QGroupBox()
         box.setObjectName("Card")
+        self._editor_box = box
         layout = QVBoxLayout(box)
         layout.setContentsMargins(12, 12, 12, 12)
 
@@ -163,56 +146,63 @@ class AdminPanel(QWidget):
         form.setSpacing(10)
 
         self._name_edit = QLineEdit()
-        self._name_edit.setPlaceholderText("Nombre visible (vacio = el de Brave)")
         self._name_edit.editingFinished.connect(self._on_rename)
-        form.addRow("Nombre", self._name_edit)
+        form.addRow("", self._name_edit)
 
         color_row = QHBoxLayout()
-        self._color_button = QPushButton("Elegir color")
+        self._color_button = QPushButton()
         self._color_button.clicked.connect(self._on_pick_color)
         color_row.addWidget(self._color_button)
         self._color_preview = QFrame()
         self._color_preview.setFixedSize(28, 20)
         color_row.addWidget(self._color_preview)
         color_row.addStretch(1)
-        form.addRow("Color", color_row)
+        form.addRow("", color_row)
 
         self._icon_combo = QComboBox()
-        for name in icons.GLYPH_NAMES:
-            self._icon_combo.addItem(
-                icons.glyph_pixmap(name, "#e7eaf0", 16),
-                ICON_LABELS.get(name, name.capitalize()),
-                name,
-            )
         self._icon_combo.currentIndexChanged.connect(self._on_icon_changed)
-        form.addRow("Icono", self._icon_combo)
+        form.addRow("", self._icon_combo)
 
-        self._favorite_check = QCheckBox("Marcar como favorito")
+        image_row = QHBoxLayout()
+        self._image_preview = QLabel()
+        self._image_preview.setFixedSize(40, 40)
+        self._image_preview.setAlignment(Qt.AlignCenter)
+        image_row.addWidget(self._image_preview)
+        self._image_button = QPushButton()
+        self._image_button.clicked.connect(self._emit_image)
+        image_row.addWidget(self._image_button)
+        self._image_clear = QPushButton()
+        self._image_clear.clicked.connect(self._emit_clear_image)
+        image_row.addWidget(self._image_clear)
+        image_row.addStretch(1)
+        form.addRow("", image_row)
+
+        self._favorite_check = QCheckBox()
         self._favorite_check.toggled.connect(self._on_favorite_toggled)
         form.addRow("", self._favorite_check)
         layout.addLayout(form)
 
         buttons = QHBoxLayout()
-        move_up = QPushButton("Subir")
-        move_up.clicked.connect(lambda: self._emit_move(-1))
-        buttons.addWidget(move_up)
-        move_down = QPushButton("Bajar")
-        move_down.clicked.connect(lambda: self._emit_move(1))
-        buttons.addWidget(move_down)
-        open_button = QPushButton("Abrir perfil")
-        open_button.clicked.connect(self._emit_open)
-        buttons.addWidget(open_button)
-        reset = QPushButton("Restablecer")
-        reset.setToolTip("Vuelve al nombre y al icono originales de Brave")
-        reset.clicked.connect(self._emit_reset)
-        buttons.addWidget(reset)
+        self._move_up = QPushButton()
+        self._move_up.clicked.connect(lambda: self._emit_move(-1))
+        buttons.addWidget(self._move_up)
+        self._move_down = QPushButton()
+        self._move_down.clicked.connect(lambda: self._emit_move(1))
+        buttons.addWidget(self._move_down)
+        self._open_button = QPushButton()
+        self._open_button.clicked.connect(self._emit_open)
+        buttons.addWidget(self._open_button)
+        self._reset_button = QPushButton()
+        self._reset_button.clicked.connect(self._emit_reset)
+        buttons.addWidget(self._reset_button)
         buttons.addStretch(1)
         layout.addLayout(buttons)
         return box
 
     def _build_settings_group(self) -> QWidget:
-        box = QGroupBox("Ajustes")
+        box = QGroupBox()
         box.setObjectName("Card")
+        self._settings_box = box
         layout = QVBoxLayout(box)
         layout.setContentsMargins(12, 12, 12, 12)
 
@@ -222,41 +212,36 @@ class AdminPanel(QWidget):
         self._poll_spin = QSpinBox()
         self._poll_spin.setRange(500, 30000)
         self._poll_spin.setSingleStep(500)
-        self._poll_spin.setSuffix(" ms")
         self._poll_spin.valueChanged.connect(
             lambda value: self.settingChanged.emit("poll_interval", str(value))
         )
-        form.addRow("Actualizar cada", self._poll_spin)
+        form.addRow("", self._poll_spin)
 
-        self._activate_check = QCheckBox("Activar el perfil al hacer clic")
+        self._activate_check = QCheckBox()
         self._activate_check.toggled.connect(
             lambda state: self.settingChanged.emit("activate_on_click", "1" if state else "0")
         )
         form.addRow("", self._activate_check)
 
-        self._hotkeys_check = QCheckBox("Atajos globales de teclado")
+        self._hotkeys_check = QCheckBox()
         self._hotkeys_check.toggled.connect(
             lambda state: self.settingChanged.emit("hotkeys_enabled", "1" if state else "0")
         )
         form.addRow("", self._hotkeys_check)
 
-        self._tray_check = QCheckBox("Icono en la bandeja del sistema")
+        self._tray_check = QCheckBox()
         self._tray_check.toggled.connect(
             lambda state: self.settingChanged.emit("tray_enabled", "1" if state else "0")
         )
         form.addRow("", self._tray_check)
 
-        self._autostart_check = QCheckBox("Iniciar con el sistema")
+        self._autostart_check = QCheckBox()
         self._autostart_check.toggled.connect(
             lambda state: self.settingChanged.emit("autostart", "1" if state else "0")
         )
         form.addRow("", self._autostart_check)
 
-        self._tabs_check = QCheckBox("Listar las pestañas abiertas")
-        self._tabs_check.setToolTip(
-            "Abre Brave con el modo de accesibilidad activado para poder ver todas "
-            "las pestañas de cada ventana. Solo se lee el titulo de cada pestaña."
-        )
+        self._tabs_check = QCheckBox()
         self._tabs_check.toggled.connect(
             lambda state: self.settingChanged.emit("read_tabs", "1" if state else "0")
         )
@@ -266,13 +251,13 @@ class AdminPanel(QWidget):
         return box
 
     def _build_shortcuts_group(self) -> QWidget:
-        box = QGroupBox("Atajos de teclado")
+        box = QGroupBox()
         box.setObjectName("Card")
+        self._shortcuts_box = box
         layout = QVBoxLayout(box)
         layout.setContentsMargins(12, 12, 12, 12)
 
         self._shortcut_table = QTableWidget(0, 2)
-        self._shortcut_table.setHorizontalHeaderLabels(["Accion", "Atajo"])
         self._shortcut_table.verticalHeader().setVisible(False)
         self._shortcut_table.setEditTriggers(QTableWidget.DoubleClicked)
         self._shortcut_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -282,35 +267,44 @@ class AdminPanel(QWidget):
         self._shortcut_table.itemChanged.connect(self._on_shortcut_edited)
         layout.addWidget(self._shortcut_table)
 
-        note = QLabel(
-            "Los atajos globales se reservan en el servidor X. Si Cinnamon ya usa "
-            "una combinacion, la aplicacion lo indica y no la roba."
-        )
-        note.setObjectName("Muted")
-        note.setWordWrap(True)
-        layout.addWidget(note)
+        self._shortcut_note = QLabel()
+        self._shortcut_note.setObjectName("Muted")
+        self._shortcut_note.setWordWrap(True)
+        layout.addWidget(self._shortcut_note)
 
-        reset = QPushButton("Restablecer atajos")
-        reset.clicked.connect(self.shortcutResetRequested.emit)
-        layout.addWidget(reset)
+        self._shortcut_reset = QPushButton()
+        self._shortcut_reset.clicked.connect(self.shortcutResetRequested.emit)
+        layout.addWidget(self._shortcut_reset)
         return box
 
-    # ------------------------------------------------------------- datos
+    # ------------------------------------------------------------- data
 
     def set_profiles(self, profiles: list[Profile]) -> None:
+        """Fills the table in place, so the refresh does not disturb the user."""
         self._profiles = profiles
         self._loading = True
         self._table.setRowCount(len(profiles))
         for row, profile in enumerate(profiles):
-            name_item = QTableWidgetItem(profile.label)
-            name_item.setData(Qt.UserRole, profile.id)
-            self._table.setItem(row, 0, name_item)
-            self._table.setItem(row, 1, QTableWidgetItem(profile.directory_name))
-            self._table.setItem(row, 2, QTableWidgetItem(profile.status_text))
-            self._table.setItem(row, 3, QTableWidgetItem(str(profile.window_count)))
+            values = (
+                profile.label,
+                profile.directory_name,
+                profile.status_text,
+                str(profile.window_count),
+                str(profile.tab_count),
+            )
+            for column, value in enumerate(values):
+                item = self._table.item(row, column)
+                if item is None:
+                    item = QTableWidgetItem()
+                    self._table.setItem(row, column, item)
+                if column == 0:
+                    item.setData(Qt.UserRole, profile.id)
+                if item.text() != value:
+                    item.setText(value)
         if profiles:
             index = next((i for i, p in enumerate(profiles) if p.id == self._current), 0)
-            self._table.selectRow(index)
+            if self._table.currentRow() != index:
+                self._table.selectRow(index)
             self._load_editor(profiles[index])
         else:
             self._load_editor(None)
@@ -319,8 +313,8 @@ class AdminPanel(QWidget):
     def set_shortcuts(self, bindings: dict[str, str]) -> None:
         self._loading = True
         self._shortcut_table.setRowCount(len(SHORTCUT_ACTIONS))
-        for row, (action, label) in enumerate(SHORTCUT_ACTIONS):
-            name_item = QTableWidgetItem(label)
+        for row, (action, _) in enumerate(SHORTCUT_ACTIONS):
+            name_item = QTableWidgetItem(tr(_label_key(action)))
             name_item.setFlags(Qt.ItemIsEnabled)
             self._shortcut_table.setItem(row, 0, name_item)
             self._shortcut_table.setItem(
@@ -333,9 +327,7 @@ class AdminPanel(QWidget):
         self._poll_spin.setValue(int(settings.get("poll_interval", 2000)))
         self._activate_check.setChecked(settings.get("activate_on_click", "1") == "1")
         self._hotkeys_check.setChecked(settings.get("hotkeys_enabled", "1") == "1")
-        self._tray_check.setChecked(
-            settings.get("tray_enabled", "0") == "0" or settings.get("tray_enabled", "1") == "1"
-        )
+        self._tray_check.setChecked(settings.get("tray_enabled", "0") == "1")
         self._autostart_check.setChecked(settings.get("autostart", "0") == "1")
         self._tabs_check.setChecked(settings.get("read_tabs", "1") == "1")
         self._loading = False
@@ -345,16 +337,77 @@ class AdminPanel(QWidget):
         for row in range(self._table.rowCount()):
             item = self._table.item(row, 0)
             if item is not None and item.data(Qt.UserRole) == profile_id:
-                self._table.selectRow(row)
+                if self._table.currentRow() != row:
+                    self._table.selectRow(row)
                 self._load_editor(self._profile_by_id(profile_id))
                 return
 
-    # ------------------------------------------------------------- acciones
+    # ----------------------------------------------------------- retranslate
+
+    def retranslate(self) -> None:
+        """Rebuilds every text of the panel in the active language."""
+        previous = self._loading
+        self._loading = True
+        self._profiles_box.setTitle(tr("admin.profiles_group"))
+        self._table.setHorizontalHeaderLabels(
+            [
+                tr("admin.table.profile"),
+                tr("admin.table.directory"),
+                tr("admin.table.status"),
+                tr("admin.table.windows"),
+                tr("admin.table.tabs"),
+            ]
+        )
+        self._manage_button.setText(tr("admin.manage_profiles"))
+        self._manage_button.setToolTip(tr("admin.manage_profiles_tip"))
+
+        self._editor_box.setTitle(tr("admin.editor_group"))
+        self._name_edit.setPlaceholderText(tr("admin.name_placeholder"))
+        self._color_button.setText(tr("admin.pick_color"))
+        self._icon_combo.clear()
+        for name in icons.GLYPH_NAMES:
+            self._icon_combo.addItem(
+                icons.glyph_pixmap(name, "#e7eaf0", 16),
+                tr(f"icon.{name}"),
+                name,
+            )
+        self._image_button.setText(tr("admin.pick_image"))
+        self._image_button.setToolTip(tr("admin.image_tip"))
+        self._image_clear.setText(tr("admin.clear_image"))
+        self._favorite_check.setText(tr("admin.favorite"))
+        self._move_up.setText(tr("admin.up"))
+        self._move_down.setText(tr("admin.down"))
+        self._open_button.setText(tr("admin.open"))
+        self._reset_button.setText(tr("admin.reset"))
+        self._reset_button.setToolTip(tr("admin.reset_tip"))
+
+        self._settings_box.setTitle(tr("admin.settings_group"))
+        self._poll_spin.setSuffix(" ms")
+        self._activate_check.setText(tr("admin.settings.activate_on_click"))
+        self._hotkeys_check.setText(tr("admin.settings.hotkeys"))
+        self._tray_check.setText(tr("admin.settings.tray"))
+        self._autostart_check.setText(tr("admin.settings.autostart"))
+        self._tabs_check.setText(tr("admin.settings.read_tabs"))
+        self._tabs_check.setToolTip(tr("admin.settings.read_tabs_tip"))
+
+        self._shortcuts_box.setTitle(tr("admin.shortcuts_group"))
+        self._shortcut_table.setHorizontalHeaderLabels(
+            [tr("admin.shortcuts.action"), tr("admin.shortcuts.shortcut")]
+        )
+        self._shortcut_note.setText(tr("admin.shortcuts.note"))
+        self._shortcut_reset.setText(tr("admin.shortcuts.reset"))
+
+        self.set_shortcuts(self._shortcut_bindings)
+        self._load_editor(self._profile_by_id(self._current) if self._current else None)
+        self._loading = previous
+
+    # ------------------------------------------------------------- actions
 
     def _profile_by_id(self, profile_id: str) -> Profile | None:
         return next((p for p in self._profiles if p.id == profile_id), None)
 
     def _load_editor(self, profile: Profile | None) -> None:
+        previous = self._loading
         self._loading = True
         enabled = profile is not None
         for widget in (
@@ -362,10 +415,14 @@ class AdminPanel(QWidget):
             self._color_button,
             self._icon_combo,
             self._favorite_check,
+            self._image_button,
+            self._image_clear,
         ):
             widget.setEnabled(enabled)
         if profile is None:
             self._name_edit.setText("")
+            self._image_preview.clear()
+            self._loading = previous
             return
         self._current = profile.id
         self._name_edit.setText(profile.display_name)
@@ -373,7 +430,12 @@ class AdminPanel(QWidget):
         index = self._icon_combo.findData(profile.icon)
         self._icon_combo.setCurrentIndex(max(0, index))
         self._color_preview.setStyleSheet(f"background-color: {profile.color}; border-radius: 6px;")
-        self._loading = False
+        if profile.custom_image:
+            pixmap = icons.avatar_pixmap(profile, 40)
+            self._image_preview.setPixmap(pixmap)
+        else:
+            self._image_preview.clear()
+        self._loading = previous
 
     def _on_table_selection(self) -> None:
         if self._loading:
@@ -400,7 +462,7 @@ class AdminPanel(QWidget):
         profile = self._profile_by_id(self._current)
         if profile is None:
             return
-        chosen = QColorDialog.getColor(QColor(profile.color), self, "Color del perfil")
+        chosen = QColorDialog.getColor(QColor(profile.color), self, tr("dialog.color.title"))
         if chosen.isValid():
             self._color_preview.setStyleSheet(
                 f"background-color: {chosen.name()}; border-radius: 6px;"
@@ -436,3 +498,27 @@ class AdminPanel(QWidget):
     def _emit_reset(self) -> None:
         if self._current:
             self.resetRequested.emit(self._current)
+
+    def _emit_image(self) -> None:
+        if self._current:
+            self.imageRequested.emit(self._current)
+
+    def _emit_clear_image(self) -> None:
+        if self._current:
+            self.imageCleared.emit(self._current)
+
+    @property
+    def _shortcut_bindings(self) -> dict[str, str]:
+        return {
+            action: self._shortcut_table.item(row, 1).text()
+            for row, (action, _) in enumerate(SHORTCUT_ACTIONS)
+            if self._shortcut_table.item(row, 1) is not None
+        }
+
+
+def _label_key(action: str) -> str:
+    """Translation key of a shortcut action."""
+    for name, key in SHORTCUT_ACTIONS:
+        if name == action:
+            return key
+    return action

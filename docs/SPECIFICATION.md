@@ -1,80 +1,84 @@
-# Especificación funcional y técnica (SRS)
+# Functional and technical specification (SRS)
 
-> Documento original de requisitos que da origen a la aplicación. Se conserva
-> sin cambios en su contenido; la sección 15 recoge cómo se ha traducido a la
-> implementación actual.
+> The original requirements document the application was built from. It was
+> written in Spanish (`Brave_Workspace_Manager_Specification.docx`); this is
+> an English translation that keeps its content unchanged. Section 15 shows
+> how each requirement maps to the current implementation.
 
-| Plataforma inicial | Linux Mint + Cinnamon |
-| Navegador objetivo | Brave Browser (perfiles nativos) |
-| Tecnología propuesta | Python 3 + PySide6 + SQLite |
-| Versión / fecha | 1.0 · Noviembre de 2026 |
+| | |
+|---|---|
+| Initial platform | Linux Mint + Cinnamon |
+| Target browser | Brave Browser (native profiles) |
+| Proposed technology | Python 3 + PySide6 + SQLite |
+| Version / date | 1.0 · November 2026 |
 
-## 1. Visión del producto
+## 1. Product vision
 
-Desarrollar una aplicación de escritorio para Linux Mint Cinnamon que permita administrar múltiples perfiles nativos de Brave desde una interfaz visual unificada. Cada perfil representa un contexto independiente (cliente, proyecto o uso personal). El usuario podrá ver todos sus perfiles, saber cuáles están abiertos y cambiar entre ellos rápidamente.
-La experiencia debe parecerse a una ventana con pestañas superiores —Perfil 1, Perfil 2, Perfil 3— aunque internamente se utilicen ventanas nativas e independientes de Brave.
+Build a desktop application for Linux Mint Cinnamon that manages multiple native Brave profiles from a unified visual interface. Each profile represents an independent context (client, project or personal use). The user can see all their profiles, know which ones are open, and switch between them quickly.
+The experience should resemble a window with tabs along the top — Profile 1, Profile 2, Profile 3 — even though internally native, independent Brave windows are used.
 
-## 2. Objetivos y principios
+## 2. Goals and principles
 
-Conservar Brave como navegador principal; no reemplazarlo ni incrustarlo en otra aplicación.
-Mantener el aislamiento nativo de cada perfil: cookies, sesiones, almacenamiento, extensiones y autenticación.
-Permitir cambiar de perfil con un clic o atajo de teclado, sin cerrar ni reiniciar las ventanas.
-Mostrar los perfiles y el estado de sus ventanas desde una interfaz central.
-Evitar modificar directamente bases de datos y archivos internos de los perfiles de Brave.
+Keep Brave as the main browser; do not replace it or embed it in another application.
+Preserve the native isolation of each profile: cookies, sessions, storage, extensions and authentication.
+Allow switching profiles with a click or a keyboard shortcut, without closing or restarting windows.
+Show the profiles and the state of their windows from a central interface.
+Avoid directly modifying the databases and internal files of Brave's profiles.
 
-## 3. Alcance funcional
+## 3. Functional scope
 
-### 3.1 Interfaz principal
+### 3.1 Main interface
 
-La interfaz tendrá tres áreas:
-Barra superior de perfiles: pestañas visuales con nombre, color, icono, indicador de actividad y cantidad de ventanas/pestañas cuando esa información esté disponible.
-Área de contenido: muestra las ventanas del perfil seleccionado y, en fases posteriores, sus pestañas individuales.
-Área de administración: crear/abrir perfiles, renombrar, cambiar color e icono, ordenar y configurar atajos.
+The interface will have three areas:
+Top profile bar: visual tabs with name, colour, icon, activity indicator and number of windows/tabs when that information is available.
+Content area: shows the windows of the selected profile and, in later phases, its individual tabs.
+Administration area: create/open profiles, rename, change colour and icon, reorder and configure shortcuts.
 
-### 3.2 Comportamiento al cambiar de perfil
+### 3.2 Behaviour when switching profiles
 
-El usuario selecciona un perfil en la barra superior o utiliza un atajo.
-La aplicación identifica las ventanas existentes asociadas a ese perfil.
-Activa y restaura la ventana correspondiente, llevándola al primer plano.
-Las ventanas de otros perfiles permanecen abiertas y sus sesiones no se modifican.
-Si el perfil no tiene ventanas abiertas, la aplicación puede abrirlo usando su directorio nativo.
+The user selects a profile in the top bar or uses a shortcut.
+The application identifies the existing windows associated with that profile.
+It activates and restores the corresponding window, bringing it to the foreground.
+The windows of other profiles stay open and their sessions are not modified.
+If the profile has no open windows, the application can open it using its native folder.
 
-### 3.3 Gestión de perfiles
+### 3.3 Profile management
 
-La aplicación debe descubrir los perfiles existentes en la ubicación habitual:
+The application must discover the existing profiles in the usual location:
 `~/.config/BraveSoftware/Brave-Browser/`
-Debe inspeccionar de forma no destructiva el archivo Local State y los directorios de perfil, por ejemplo Default, Profile 1 y Profile 2. Los nombres visibles y metadatos deben obtenerse de forma segura; no se debe asumir que el nombre de carpeta coincide con el nombre mostrado en Brave.
-La configuración propia de la aplicación almacenará el identificador del perfil, directorio, nombre personalizado, color, icono, orden y preferencias. Se recomienda SQLite para permitir evolución del modelo.
+It must inspect, non-destructively, the Local State file and the profile folders, for example Default, Profile 1 and Profile 2. Display names and metadata must be obtained safely; it must not assume that the folder name matches the name shown in Brave.
+The application's own configuration will store the profile identifier, folder, custom name, colour, icon, order and preferences. SQLite is recommended so that the model can evolve.
 
-## 4. Administración de ventanas y pestañas
+## 4. Window and tab management
 
-La identificación de ventanas es el principal riesgo técnico. No debe depender únicamente del título, porque cambia con la navegación.
-Enumerar ventanas de Brave y obtener su identificador del gestor de ventanas.
-Relacionar ventana, PID y proceso de navegador con el perfil correspondiente.
-Detectar ventanas nuevas, cerradas, minimizadas y activas.
-Activar, restaurar y minimizar ventanas mediante mecanismos soportados por el entorno de escritorio.
-Investigar cómo obtener de forma fiable el directorio de perfil desde los argumentos/procesos de Chromium y cómo asociarlo con cada ventana.
-No prometer lectura completa de pestañas individuales en el MVP: Chromium no ofrece una API pública general para que una aplicación externa enumere todas las pestañas y sus URLs de forma fiable.
+Identifying windows is the main technical risk. It must not depend only on the title, because the title changes while browsing.
+List Brave's windows and obtain their identifier from the window manager.
+Relate window, PID and browser process to the corresponding profile.
+Detect new, closed, minimised and active windows.
+Activate, restore and minimise windows through mechanisms supported by the desktop environment.
+Investigate how to reliably obtain the profile folder from Chromium's arguments/processes and how to associate it with each window.
+Do not promise full reading of individual tabs in the MVP: Chromium offers no general public API for an external application to reliably list all tabs and their URLs.
 
-## 5. Integración con Linux Mint Cinnamon
+## 5. Integration with Linux Mint Cinnamon
 
-La primera versión priorizará Cinnamon bajo X11, donde la administración externa de ventanas es más accesible.
-Evaluar EWMH/X11 para enumerar y activar ventanas.
-Evaluar wmctrl y xdotool como herramientas auxiliares de la primera prueba de concepto; preferir APIs o bibliotecas mantenibles cuando sea posible.
-Usar /proc para inspección de procesos y argumentos, con manejo de permisos y procesos que desaparecen durante la consulta.
-Soportar atajos globales, inicio automático y, opcionalmente, icono de bandeja.
-Diseñar la capa de integración para que Wayland pueda añadirse posteriormente; no asumir que las mismas técnicas funcionarán allí.
+The first version will prioritise Cinnamon on X11, where external window management is more accessible.
+Evaluate EWMH/X11 to list and activate windows.
+Evaluate wmctrl and xdotool as auxiliary tools for the first proof of concept; prefer maintainable APIs or libraries where possible.
+Use /proc to inspect processes and arguments, handling permissions and processes that disappear during the query.
+Support global shortcuts, autostart and, optionally, a tray icon.
+Design the integration layer so that Wayland can be added later; do not assume the same techniques will work there.
 
-## 6. Arquitectura propuesta
+## 6. Proposed architecture
 
-| Componente | Tecnología candidata | Responsabilidad |
-| Interfaz de escritorio | Python + PySide6 | Barra de perfiles, panel de ventanas, preferencias y eventos de usuario. |
-| Lógica de aplicación | Python 3 | Descubrimiento, asociación de procesos/ventanas, acciones y sincronización del estado. |
-| Persistencia | SQLite | Nombres, colores, orden, preferencias y metadatos propios. |
-| Integración de ventanas | X11/EWMH; evaluación de wmctrl | Enumerar, activar, restaurar y observar ventanas. |
-| Integración de procesos | /proc + subprocess | Inspeccionar procesos y abrir perfiles con argumentos apropiados. |
+| Component | Candidate technology | Responsibility |
+|---|---|---|
+| Desktop interface | Python + PySide6 | Profile bar, windows panel, preferences and user events. |
+| Application logic | Python 3 | Discovery, process/window association, actions and state synchronisation. |
+| Persistence | SQLite | Names, colours, order, preferences and own metadata. |
+| Window integration | X11/EWMH; evaluation of wmctrl | List, activate, restore and observe windows. |
+| Process integration | /proc + subprocess | Inspect processes and open profiles with the appropriate arguments. |
 
-## 7. Modelo de datos inicial
+## 7. Initial data model
 
 ### Profile
 
@@ -84,109 +88,112 @@ Diseñar la capa de integración para que Wayland pueda añadirse posteriormente
 
 `window_id`, `process_id`, `profile_id`, `title`, `is_active`, `is_minimized`, `last_seen`
 
-### Tab (fase posterior)
+### Tab (later phase)
 
-`tab_id` (si es obtenible), `window_id`, `title`, `url`, `is_active`
-La información de ventanas y pestañas es estado dinámico; no debe confundirse con la configuración persistente de perfiles.
+`tab_id` (if obtainable), `window_id`, `title`, `url`, `is_active`
+Window and tab information is dynamic state; it must not be confused with the persistent profile configuration.
 
-## 8. Seguridad y privacidad
+## 8. Security and privacy
 
-No copiar, intercambiar ni sincronizar cookies entre perfiles.
-No almacenar contraseñas ni tokens.
-No modificar bases de datos internas de Brave ni el archivo Local State.
-No interceptar tráfico HTTPS ni inspeccionar contenido de páginas.
-No compartir directorios de datos entre perfiles.
-Tratar las URLs como información potencialmente sensible; permitir ocultarlas en la interfaz.
-Abrir perfiles existentes usando su directorio nativo, sin crear procesos concurrentes que corrompan el mismo perfil.
+Do not copy, exchange or synchronise cookies between profiles.
+Do not store passwords or tokens.
+Do not modify Brave's internal databases or the Local State file.
+Do not intercept HTTPS traffic or inspect page content.
+Do not share data folders between profiles.
+Treat URLs as potentially sensitive information; allow hiding them in the interface.
+Open existing profiles using their native folder, without creating concurrent processes that could corrupt the same profile.
 
-## 9. Atajos de teclado propuestos
+## 9. Proposed keyboard shortcuts
 
-| Atajo | Acción |
+| Shortcut | Action |
 |---|---|
-| Ctrl + Alt + 1…9 | Activar el perfil asignado |
-| Ctrl + Alt + Tab | Siguiente perfil |
-| Ctrl + Alt + Shift + Tab | Perfil anterior |
-| Ctrl + Alt + B | Mostrar/ocultar el administrador |
+| Ctrl + Alt + 1…9 | Activate the assigned profile |
+| Ctrl + Alt + Tab | Next profile |
+| Ctrl + Alt + Shift + Tab | Previous profile |
+| Ctrl + Alt + B | Show/hide the administrator |
 
-Los atajos deben ser configurables y deben detectarse conflictos con atajos existentes de Cinnamon u otras aplicaciones.
+Shortcuts must be configurable, and conflicts with existing Cinnamon or application shortcuts must be detected.
 
-## 10. Plan de entregas
+## 10. Delivery plan
 
-### Fase 0 — Prueba de concepto técnica
+### Phase 0 — Technical proof of concept
 
-Detectar dos perfiles nativos de Brave.
-Abrir ambos perfiles y mantenerlos simultáneamente activos.
-Enumerar sus ventanas y asociarlas de forma fiable al perfil correcto.
-Cambiar entre ventanas sin reiniciar Brave.
-Validar el comportamiento en la versión real de Linux Mint/Cinnamon del usuario.
+Detect two native Brave profiles.
+Open both profiles and keep them active at the same time.
+List their windows and reliably associate them with the correct profile.
+Switch between windows without restarting Brave.
+Validate the behaviour on the user's actual Linux Mint/Cinnamon version.
 
-### Fase 1 — MVP
+### Phase 1 — MVP
 
-Descubrimiento automático de perfiles.
-Barra visual de perfiles con nombre, color e icono.
-Detección y agrupación de ventanas por perfil.
-Activación de ventanas por clic y atajos globales.
-Apertura de perfiles existentes y persistencia de preferencias.
-Inicio automático opcional.
+Automatic profile discovery.
+Visual profile bar with name, colour and icon.
+Detection and grouping of windows by profile.
+Window activation by click and global shortcuts.
+Opening existing profiles and persisting preferences.
+Optional autostart.
 
-### Fase 2 — Organización avanzada
+### Phase 2 — Advanced organisation
 
-Vista de ventanas y pestañas individuales cuando sea técnicamente viable.
-Previsualizaciones, búsqueda y ordenamiento.
-Múltiples ventanas por perfil y soporte de varios monitores.
-Integración más profunda con Cinnamon.
+View of individual windows and tabs when technically feasible.
+Previews, search and sorting.
+Multiple windows per profile and multi-monitor support.
+Deeper integration with Cinnamon.
 
-### Fase 3 — Extensiones
+### Phase 3 — Extensions
 
-Evaluación de compatibilidad con Wayland.
-Perfiles favoritos y temporales.
-Reglas automáticas y gestión de escritorios virtuales.
-Búsqueda global de pestañas y estadísticas opcionales.
+Evaluation of Wayland compatibility.
+Favourite and temporary profiles.
+Automatic rules and virtual desktop management.
+Global tab search and optional statistics.
 
-## 11. Criterios de aceptación del MVP
+## 11. MVP acceptance criteria
 
-Detecta los perfiles nativos existentes de Brave sin modificarlos.
-Muestra todos los perfiles descubiertos en una única interfaz.
-Identifica correctamente las ventanas de cada perfil en pruebas repetidas.
-Permite cambiar de perfil mediante clic y teclado.
-No reinicia Brave al alternar entre perfiles que ya están abiertos.
-No pierde sesiones, cookies ni pestañas durante el cambio.
-Sigue funcionando después de cerrar y volver a iniciar sesión en Linux.
-Maneja correctamente perfiles cerrados, ventanas nuevas y procesos que terminan inesperadamente.
+Detects the existing native Brave profiles without modifying them.
+Shows all discovered profiles in a single interface.
+Correctly identifies the windows of each profile in repeated tests.
+Allows switching profiles by click and keyboard.
+Does not restart Brave when switching between profiles that are already open.
+Does not lose sessions, cookies or tabs during the switch.
+Keeps working after logging out of and back into Linux.
+Correctly handles closed profiles, new windows and processes that end unexpectedly.
 
-## 12. Riesgos y decisiones pendientes
+## 12. Risks and pending decisions
 
-| Riesgo / decisión | Tratamiento |
+| Risk / decision | Handling |
 |---|---|
-| Asociación ventana-perfil | Riesgo alto. Debe validarse en la prueba de concepto; los títulos no son identificadores fiables. |
-| Enumeración de pestañas | Limitación potencial. No asumir que existe una API pública y estable para leer todas las pestañas de Brave. |
-| X11 frente a Wayland | La primera versión prioriza X11; Wayland impone restricciones de control de ventanas. |
-| Múltiples ventanas por perfil | Debe definirse cómo se presenta y cuál se activa al seleccionar el perfil. |
-| Apertura de perfiles | Debe evitarse lanzar instancias concurrentes sobre el mismo directorio de perfil. |
+| Window-profile association | High risk. Must be validated in the proof of concept; titles are not reliable identifiers. |
+| Tab enumeration | Potential limitation. Do not assume a public, stable API exists to read all of Brave's tabs. |
+| X11 versus Wayland | The first version prioritises X11; Wayland imposes restrictions on window control. |
+| Multiple windows per profile | Define how they are presented and which one is activated when the profile is selected. |
+| Opening profiles | Avoid launching concurrent instances over the same profile folder. |
 
-## 13. Principio de diseño
+## 13. Design principle
 
-La aplicación debe sentirse como una extensión natural del flujo de trabajo de Brave, no como otro navegador. La interfaz unifica la administración y el cambio de contexto, pero las sesiones permanecen aisladas en los perfiles y ventanas nativos de Brave. La prioridad es preservar seguridad, estabilidad, rendimiento y facilidad de uso.
+The application must feel like a natural extension of the Brave workflow, not like another browser. The interface unifies administration and context switching, but sessions remain isolated in Brave's native profiles and windows. The priority is to preserve security, stability, performance and ease of use.
 
-## 14. Primera tarea de desarrollo recomendada
+## 14. Recommended first development task
 
-Antes de construir la interfaz completa, implementar una prueba de concepto en Python que detecte dos perfiles, identifique sus procesos y ventanas, y permita activar cada ventana de forma fiable. Documentar los resultados en la versión concreta de Linux Mint Cinnamon del usuario. Si esta prueba no demuestra una asociación estable, revisar la arquitectura antes de avanzar.
+Before building the full interface, implement a proof of concept in Python that detects two profiles, identifies their processes and windows, and reliably activates each window. Document the results on the user's specific Linux Mint Cinnamon version. If this test does not demonstrate a stable association, revise the architecture before going further.
 
-## 15. Correspondencia con la implementación
+## 15. Mapping to the implementation
 
-| Apartado | Dónde está resuelto |
+| Section | Where it is implemented |
 |---|---|
-| 1, 3.1 — Interfaz unificada | `brave_workspace_manager/ui/main_window.py`, `ui/profile_tab.py`, `ui/window_panel.py` |
-| 2 — No modificar Brave | Todo el acceso a datos de Brave es de solo lectura (`discovery.py`, `processes.py`) |
-| 3.2 — Cambio de perfil | `core/controller.py::activate_profile` (activa la ventana conocida o abre el perfil con su directorio nativo) |
-| 3.3 — Descubrimiento y persistencia | `discovery.py` + `database.py` (SQLite en `~/.local/share/brave-workspace-manager/workspace.db`) |
-| 4 — Ventanas | `x11/backend.py` (EWMH con python-xlib) y `x11/wmctrl_backend.py` como alternativa |
-| 4, 12 — Asociación ventana-perfil | `core/resolver.py` con las cinco reglas documentadas en el README |
-| 5 — Integración Cinnamon | `x11/grab.py` (capturas de teclado), `core/autostart.py`, `ui/tray.py` |
-| 6 — Arquitectura | `docs/ARCHITECTURE.md` |
-| 7 — Modelo de datos | `models.py` y las tablas de `database.py` |
-| 8 — Seguridad | `docs/ARCHITECTURE.md` (apartado «Modelo de seguridad») |
-| 9 — Atajos | `ui/admin_panel.py` (configuración) y `x11/grab.py` (capturas globales) |
-| 10 — Entregas | Fase 0 completada como prueba de concepto; Fase 1 implementada en esta versión |
-| 11 — Aceptación del MVP | Cubierto en conjunto; la agrupación de ventanas por perfil funciona con las reglas 1, 2, 3 y 4 y expone el caso no resoluble en «Ventanas sin asignar» |
-| 14 — Prueba de concepto | Validada sobre Linux Mint 22.3 / Cinnamon con dos perfiles simultáneos; resultados en `docs/ARCHITECTURE.md` |
+| 1, 3.1 — Unified interface | `brave_workspace_manager/ui/main_window.py`. The "top profile bar" is implemented as a responsive gallery of cards (`ui/profile_gallery.py`, `ui/profile_tab.py`) showing name, colour, icon or custom image, open status and number of windows and tabs. The content area is folded into the cards (window actions and a per-window menu) plus the Unassigned windows card (`ui/unassigned_card.py`). The administration area (`ui/admin_panel.py`) is always visible in the left column, under the summary. |
+| 2 — Do not modify Brave | All access to Brave's data is read-only (`discovery.py`, `processes.py`). Custom images are copied into the app's own data folder. |
+| 3.2 — Switching profiles | `core/controller.py::activate_profile` (activates the known window or opens the profile with its native folder). |
+| 3.3 — Discovery and persistence | `discovery.py` + `database.py` (SQLite in `~/.local/share/brave-workspace-manager/workspace.db`, with automatic column migrations). |
+| 3.1, 3.3 — Reordering | Drag and drop in the gallery (`controller.reorder_profiles`) and move up/down in the admin panel; the order is persisted. |
+| 4 — Windows | `x11/backend.py` (EWMH with python-xlib) and `x11/wmctrl_backend.py` as fallback. Activate, minimise/restore, maximise/restore and polite close (`WM_DELETE_WINDOW` / `wmctrl -c`). |
+| 4, 12 — Window-profile association | `core/resolver.py` with the five rules documented in the README; unresolved windows can be assigned by hand or saved as a virtual profile. |
+| 4, Phase 2 — Tabs | Tab titles and counts per window through AT-SPI (`a11y_helper.py`, `tabs.py`). URLs are deliberately not read. |
+| 5 — Cinnamon integration | `x11/grab.py` (keyboard grabs), `core/autostart.py`, `ui/tray.py` (optional tray icon). |
+| 6 — Architecture | `docs/ARCHITECTURE.md` |
+| 7 — Data model | `models.py` and the tables in `database.py`. `Profile` adds `custom_image` and `is_virtual`; `Window` is dynamic state and is not persisted, only learned assignments are. |
+| 8 — Security | `docs/ARCHITECTURE.md` (section "Security model"). |
+| 9 — Shortcuts | `ui/admin_panel.py` (configuration) and `x11/grab.py` (global grabs). `Ctrl+Alt+1…9`, `Ctrl+Alt+Tab` and `Ctrl+Alt+Shift+Tab` are implemented. `Ctrl+Alt+B` (show/hide the administrator) was dropped in 1.1.0 because the administration panel is always visible. |
+| 10 — Delivery | Phase 0 completed as a proof of concept; Phase 1 implemented. From Phase 2, tab titles and handling of multiple windows per profile are implemented; from Phase 3, favourite profiles. |
+| 11 — MVP acceptance | Covered as a whole; grouping windows by profile works with rules 1, 2, 3 and 4 and exposes the unresolvable case on the Unassigned windows card. |
+| 14 — Proof of concept | Validated on Linux Mint 22.3 / Cinnamon with two simultaneous profiles; results in `docs/ARCHITECTURE.md`. |
+| — Internationalisation (not in the original SRS) | `i18n.py` and `locales/*.json`; English and Spanish. |

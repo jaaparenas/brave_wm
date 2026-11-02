@@ -1,4 +1,4 @@
-"""Iconos generados por codigo: el repositorio no depende de recursos binarios."""
+"""Icons drawn in code: the repository does not depend on binary resources."""
 
 from __future__ import annotations
 
@@ -26,6 +26,8 @@ GLYPH_NAMES = (
     "folder",
 )
 
+ACTION_GLYPHS = ("activate", "minimize", "maximize", "close", "more")
+
 
 def _polygon(center: QPointF, radius: float, sides: int, rotation: float = 0.0) -> QPainterPath:
     path = QPainterPath()
@@ -44,7 +46,7 @@ def _polygon(center: QPointF, radius: float, sides: int, rotation: float = 0.0) 
 
 
 def draw_glyph(painter: QPainter, name: str, rect: QRectF, color: QColor) -> None:
-    """Dibuja un glifo vectorial dentro de rect."""
+    """Draws a vector glyph inside rect."""
     painter.save()
     painter.setRenderHint(QPainter.Antialiasing, True)
     painter.setPen(Qt.NoPen)
@@ -271,6 +273,83 @@ def glyph_pixmap(name: str, color: str, size: int) -> QPixmap:
     return pixmap
 
 
+def draw_action(painter: QPainter, name: str, rect: QRectF, color: QColor) -> None:
+    """Draws the small icons of the window actions of a card."""
+    painter.save()
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(QBrush(color))
+    center = rect.center()
+    unit = min(rect.width(), rect.height())
+
+    if name == "activate":
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(color, max(1.0, unit * 0.14)))
+        painter.drawRect(rect.adjusted(unit * 0.18, unit * 0.28, -unit * 0.18, -unit * 0.28))
+        painter.drawLine(
+            QPointF(center.x() + unit * 0.02, center.y() - unit * 0.44),
+            QPointF(center.x() + unit * 0.02, center.y() - unit * 0.12),
+        )
+        painter.drawLine(
+            QPointF(center.x() + unit * 0.02, center.y() - unit * 0.44),
+            QPointF(center.x() - unit * 0.16, center.y() - unit * 0.24),
+        )
+        painter.drawLine(
+            QPointF(center.x() + unit * 0.02, center.y() - unit * 0.44),
+            QPointF(center.x() + unit * 0.2, center.y() - unit * 0.24),
+        )
+    elif name == "restore":
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(color, max(1.0, unit * 0.12)))
+        back = QRectF(rect.x() + unit * 0.34, rect.y() + unit * 0.16, unit * 0.5, unit * 0.5)
+        front = QRectF(rect.x() + unit * 0.16, rect.y() + unit * 0.34, unit * 0.5, unit * 0.5)
+        painter.drawLine(back.topLeft(), back.topRight())
+        painter.drawLine(back.topRight(), back.bottomRight())
+        painter.drawLine(back.topLeft(), QPointF(back.left(), front.top()))
+        painter.drawLine(QPointF(front.right(), back.bottom()), back.bottomRight())
+        painter.drawRect(front)
+    elif name == "minimize":
+        painter.drawRect(
+            QRectF(center.x() - unit * 0.34, center.y() + unit * 0.22, unit * 0.68, unit * 0.12)
+        )
+    elif name == "maximize":
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(color, max(1.0, unit * 0.14)))
+        painter.drawRect(rect.adjusted(unit * 0.2, unit * 0.2, -unit * 0.2, -unit * 0.2))
+    elif name == "close":
+        painter.setPen(QPen(color, max(1.2, unit * 0.16)))
+        painter.drawLine(
+            QPointF(center.x() - unit * 0.26, center.y() - unit * 0.26),
+            QPointF(center.x() + unit * 0.26, center.y() + unit * 0.26),
+        )
+        painter.drawLine(
+            QPointF(center.x() + unit * 0.26, center.y() - unit * 0.26),
+            QPointF(center.x() - unit * 0.26, center.y() + unit * 0.26),
+        )
+    else:  # more
+        radius = unit * 0.09
+        for offset in (-0.22, 0.0, 0.22):
+            painter.drawEllipse(
+                QRectF(
+                    center.x() + unit * offset - radius,
+                    center.y() - radius,
+                    radius * 2,
+                    radius * 2,
+                )
+            )
+    painter.restore()
+
+
+def action_pixmap(name: str, color: str, size: int) -> QPixmap:
+    """Small icon of a window action (activate, minimise, maximise, close)."""
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    draw_action(painter, name, QRectF(0, 0, size, size), QColor(color))
+    painter.end()
+    return pixmap
+
+
 def initials(text: str) -> str:
     cleaned = "".join(character for character in text if character.isalnum() or character in " .")
     parts = [part for part in cleaned.split() if part]
@@ -282,21 +361,29 @@ def initials(text: str) -> str:
 
 
 def avatar_pixmap(profile, size: int = 36) -> QPixmap:
-    """Avatar del perfil: la imagen de Brave si existe y, si no, unas iniciales."""
-    avatar = getattr(profile, "avatar_path", None)
-    if avatar:
-        pixmap = QPixmap(avatar)
-        if not pixmap.isNull():
-            scaled = pixmap.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            canvas = QPixmap(size, size)
-            canvas.fill(Qt.transparent)
-            from PySide6.QtGui import QPainter as _Painter
+    """Avatar of the profile: the image chosen by the user, Brave's own, or initials."""
+    for candidate in (
+        getattr(profile, "custom_image", ""),
+        getattr(profile, "avatar_path", None),
+    ):
+        if not candidate:
+            continue
+        pixmap = QPixmap(candidate)
+        if pixmap.isNull():
+            continue
+        scaled = pixmap.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        canvas = QPixmap(size, size)
+        canvas.fill(Qt.transparent)
+        from PySide6.QtGui import QPainter as _Painter
 
-            painter = _Painter(canvas)
-            painter.setRenderHint(_Painter.Antialiasing, True)
-            painter.drawPixmap((size - scaled.width()) // 2, (size - scaled.height()) // 2, scaled)
-            painter.end()
-            return canvas
+        painter = _Painter(canvas)
+        painter.setRenderHint(_Painter.Antialiasing, True)
+        clip = QPainterPath()
+        clip.addEllipse(0, 0, size, size)
+        painter.setClipPath(clip)
+        painter.drawPixmap((size - scaled.width()) // 2, (size - scaled.height()) // 2, scaled)
+        painter.end()
+        return canvas
 
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.transparent)
@@ -317,7 +404,7 @@ def avatar_pixmap(profile, size: int = 36) -> QPixmap:
 
 
 def app_pixmap(size: int = 64) -> QPixmap:
-    """Icono de la aplicacion: pila de perfiles en tonos Brave."""
+    """Application icon: a stack of profiles in Brave colours."""
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.transparent)
     painter = QPainter(pixmap)

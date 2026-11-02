@@ -1,4 +1,4 @@
-"""Pruebas de la asociacion entre ventanas y perfiles."""
+"""Tests of the matching between windows and profiles."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def test_no_assignment_when_several_profiles_are_open(profiles, windows) -> None
 
 
 def test_elimination_assigns_the_last_window(profiles, windows) -> None:
-    """Con dos perfiles abiertos, la ventana que queda libre es del que no tiene ventana."""
+    """With two open profiles, the free window belongs to the one without windows."""
     context = _context(profiles, windows, open_ids={"Default", "Profile 1"})
     context.assignments = {(0x1001, 42): {"profile_id": "Default", "method": "learned"}}
     WindowResolver().resolve(context)

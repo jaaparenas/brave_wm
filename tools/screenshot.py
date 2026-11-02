@@ -1,7 +1,7 @@
-"""Genera las capturas de la documentacion con datos sinteticos.
+"""Generates the documentation screenshots with synthetic data.
 
-No lee nada del perfil real del usuario: construye un directorio de datos de
-Brave simulado en un temporal y dibuja la ventana principal sobre el.
+Nothing is read from the real user profile: a fake Brave data directory is
+built in a temporary folder and the main window is drawn on top of it.
 
     python tools/screenshot.py
 """
@@ -14,13 +14,14 @@ import sys
 import tempfile
 from pathlib import Path
 
-RAIZ = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(RAIZ))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QCoreApplication, QEvent
-from PySide6.QtWidgets import QApplication, QToolButton
+from PySide6.QtCore import QCoreApplication, QEvent, QRect
+from PySide6.QtWidgets import QApplication
 
+from brave_workspace_manager import i18n
 from brave_workspace_manager.core.controller import AppController
 from brave_workspace_manager.core.launcher import ProfileLauncher
 from brave_workspace_manager.database import Database
@@ -30,54 +31,63 @@ from brave_workspace_manager.ui import icons
 from brave_workspace_manager.ui.main_window import MainWindow
 from brave_workspace_manager.ui.theme import STYLESHEET
 
-DESTINO = RAIZ / "docs" / "images"
+TARGET = ROOT / "docs" / "images"
 
-PERFILES = {
-    "Default": "Trabajo",
+PROFILES = {
+    "Default": "Work",
     "Profile 1": "Personal",
-    "Profile 2": "Pruebas",
-    "Profile 3": "Investigación",
-    "Profile 4": "Diseño",
-    "Profile 5": "Finanzas",
-    "Profile 6": "Lectura",
-    "Profile 7": "Programación",
+    "Profile 2": "Testing",
+    "Profile 3": "Research",
+    "Profile 4": "Design",
+    "Profile 5": "Finance",
+    "Profile 6": "Reading",
+    "Profile 7": "Coding",
 }
 
-VENTANAS = [
+WINDOWS = [
     WindowInfo(
         window_id=0x400001,
         pid=100,
-        title="Work · Panel de control",
+        title="Work · Dashboard",
         wm_class="brave-browser",
         is_active=True,
-        tab_count=3,
-        tab_titles=["Panel de control", "Calendario", "Notas del equipo"],
-        active_tab=0,
+        is_maximized=True,
     ),
     WindowInfo(
         window_id=0x400002,
         pid=100,
-        title="Documentación de ejemplo",
+        title="Personal · Photos",
         wm_class="brave-browser",
-        tab_count=1,
-        tab_titles=["Documentación de ejemplo"],
-        active_tab=0,
     ),
     WindowInfo(
         window_id=0x400003,
         pid=100,
-        title="Trabajo · Cuadro de mando",
+        title="Coding · Pull requests",
         wm_class="brave-browser",
         is_minimized=True,
-        tab_count=2,
-        tab_titles=["Cuadro de mando", "Informes"],
-        active_tab=1,
+    ),
+    WindowInfo(
+        window_id=0x400004,
+        pid=100,
+        title="Example documentation",
+        wm_class="brave-browser",
     ),
 ]
 
+FRAMES = [
+    FrameTabs(title="Work · Dashboard", titles=["Dashboard", "Calendar", "Team notes"], active=0),
+    FrameTabs(title="Personal · Photos", titles=["Photos", "Mail"], active=0),
+    FrameTabs(
+        title="Coding · Pull requests",
+        titles=["Pull requests", "CI", "Docs", "Issues", "Board"],
+        active=0,
+    ),
+    FrameTabs(title="Example documentation", titles=["Example documentation"], active=0),
+]
 
-class BackendFalso:
-    """Backend de ventanas simulado para las capturas."""
+
+class FakeBackend:
+    """Fake window backend for the screenshots."""
 
     name = "demo"
 
@@ -85,7 +95,7 @@ class BackendFalso:
         return True
 
     def list_windows(self) -> list[WindowInfo]:
-        return list(VENTANAS)
+        return list(WINDOWS)
 
     def activate(self, window_id: int) -> bool:
         return True
@@ -96,42 +106,37 @@ class BackendFalso:
     def restore(self, window_id: int) -> bool:
         return True
 
+    def maximize(self, window_id: int) -> bool:
+        return True
+
+    def unmaximize(self, window_id: int) -> bool:
+        return True
+
+    def close_window(self, window_id: int) -> bool:
+        return True
+
     def active_window(self) -> int | None:
-        return VENTANAS[0].window_id
+        return WINDOWS[0].window_id
 
 
-class LectorFalso:
-    """Pestanas simuladas para las capturas."""
+class FakeReader:
+    """Fake tab reader for the screenshots."""
 
     motivo = ""
     disponible = True
 
     def read(self) -> list[FrameTabs]:
-        return [
-            FrameTabs(
-                title="Work · Panel de control",
-                titles=["Panel de control", "Calendario", "Notas del equipo"],
-                active=0,
-            ),
-            FrameTabs(
-                title="Documentación de ejemplo", titles=["Documentación de ejemplo"], active=0
-            ),
-            FrameTabs(
-                title="Trabajo · Cuadro de mando",
-                titles=["Cuadro de mando", "Informes"],
-                active=1,
-            ),
-        ]
+        return list(FRAMES)
 
 
-def directorio_falso(base: Path) -> Path:
-    raiz = base / "Brave-Browser"
-    raiz.mkdir()
+def fake_brave_dir(base: Path) -> Path:
+    root = base / "Brave-Browser"
+    root.mkdir()
     info_cache = {
-        clave: {"name": valor, "gaia_name": "", "active_time": 1700000000.0}
-        for clave, valor in PERFILES.items()
+        key: {"name": value, "gaia_name": "", "active_time": 1700000000.0}
+        for key, value in PROFILES.items()
     }
-    (raiz / "Local State").write_text(
+    (root / "Local State").write_text(
         json.dumps(
             {
                 "profile": {
@@ -143,53 +148,68 @@ def directorio_falso(base: Path) -> Path:
         ),
         encoding="utf-8",
     )
-    for clave in PERFILES:
-        carpeta = raiz / clave
-        carpeta.mkdir()
-        (carpeta / "Preferences").write_text("{}", encoding="utf-8")
-    return raiz
+    for key in PROFILES:
+        folder = root / key
+        folder.mkdir()
+        (folder / "Preferences").write_text("{}", encoding="utf-8")
+    return root
+
+
+def settle(app: QApplication) -> None:
+    app.processEvents()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    app.processEvents()
 
 
 def main() -> int:
-    DESTINO.mkdir(parents=True, exist_ok=True)
+    TARGET.mkdir(parents=True, exist_ok=True)
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     app.setStyleSheet(STYLESHEET)
     app.setWindowIcon(icons.app_pixmap())
 
-    with tempfile.TemporaryDirectory() as temporal:
-        base = Path(temporal)
-        raiz = directorio_falso(base)
+    with tempfile.TemporaryDirectory() as temporary:
+        base = Path(temporary)
+        root = fake_brave_dir(base)
         database = Database(base / "workspace.db")
+        database.set_setting("language", "en")
+        i18n.set_language("en")
+        database.set_setting("hotkeys_enabled", "0")
         controller = AppController(
             database,
-            BackendFalso(),
-            ProfileLauncher("/usr/bin/brave-browser", raiz),
-            user_data_dir=raiz,
-            tab_reader=LectorFalso(),
+            FakeBackend(),
+            ProfileLauncher("/usr/bin/brave-browser", root),
+            user_data_dir=root,
+            tab_reader=FakeReader(),
         )
+        controller.set_read_tabs(False)
         controller.refresh()
+        controller.set_read_tabs(True)
+        controller._on_tabs_read(FakeReader().read())
 
-        ventana = MainWindow(controller, database)
-        ventana.resize(1220, 760)
-        ventana.show()
-        app.processEvents()
-        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
-        app.processEvents()
-        for boton in ventana.findChildren(QToolButton):
-            boton.setChecked(True)
-            break
-        app.processEvents()
-        ventana.grab().save(str(DESTINO / "ventana-principal.png"))
+        window = MainWindow(controller, database)
+        window.resize(1280, 800)
+        window.show()
+        controller.select("Default")
+        settle(app)
+        window.grab().save(str(TARGET / "main-window.png"))
 
-        ventana._admin_button.setChecked(True)
-        app.processEvents()
-        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
-        app.processEvents()
-        ventana.grab().save(str(DESTINO / "panel-admin.png"))
+        gallery = window._gallery
+        card = gallery.unassigned_card
+        top = max(0, card.y() - 210)
+        gallery.grab(QRect(0, top, gallery.width(), card.y() + card.height() - top)).save(
+            str(TARGET / "unassigned-card.png")
+        )
+
+        window._language_combo.setCurrentIndex(window._language_combo.findData("es"))
+        settle(app)
+        window.grab().save(str(TARGET / "main-window-es.png"))
+        i18n.set_language("en")
+
+        controller.stop()
         database.close()
 
-    print(f"Capturas guardadas en {DESTINO}")
+    print(f"Screenshots saved in {TARGET}")
     return 0
 
 

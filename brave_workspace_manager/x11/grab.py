@@ -1,4 +1,4 @@
-"""Captura de atajos globales de teclado mediante un grab pasivo en la raiz X11."""
+"""Global keyboard shortcuts through a passive grab on the X11 root window."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def parse_sequence(sequence: str) -> tuple[set[str], str]:
 
 
 class ShortcutGrabber:
-    """Reserva combinaciones de teclas globales y notifica cuando se pulsan."""
+    """Reserves global key combinations and reports when they are pressed."""
 
     def __init__(self, on_trigger: Callable[[str], None]) -> None:
         self._on_trigger = on_trigger
@@ -59,7 +59,7 @@ class ShortcutGrabber:
         return dict(self._failed)
 
     def start(self, bindings: dict[str, str]) -> dict[str, str]:
-        """Arranca la captura. Devuelve los atajos que no se pudieron reservar."""
+        """Starts the grab. Returns the shortcuts that could not be reserved."""
         self.stop()
         self._stop.clear()
         self._ready.clear()
@@ -82,14 +82,14 @@ class ShortcutGrabber:
     # ------------------------------------------------------------- interno
 
     def _error_handler(self, action: str):
-        """Devuelve un manejador que anota el atajo que X11 no concedio."""
+        """Returns a handler that records the shortcut X11 refused."""
 
-        def handler(error, request=None) -> None:  # pragma: no cover - ruta de error X11
+        def handler(error, request=None) -> None:  # pragma: no cover - X11 error path
             name = type(error).__name__
             if name == "BadAccess":
                 self._failed[action] = "El servidor X ya tiene esa combinacion reservada"
             else:
-                self._failed[action] = f"X11 rechazo el atajo ({name})"
+                self._failed[action] = f"X11 refused the shortcut ({name})"
 
         return handler
 

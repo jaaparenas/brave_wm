@@ -1,4 +1,4 @@
-"""Integracion con el inicio automatico de la sesion de escritorio."""
+"""Integration with the autostart of the desktop session."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from ..config import APP_ID, APP_NAME, XDG_CONFIG_HOME
 DESKTOP_ENTRY = """[Desktop Entry]
 Type=Application
 Name={name}
-Comment=Administrador de perfiles nativos de Brave
+Comment=Native Brave profile manager
 Exec={exec}
 Icon={icon}
 Terminal=false
@@ -50,7 +50,7 @@ def disable() -> bool:
 
 
 def python_command() -> str:
-    """Comando para relanzar la aplicacion al iniciar sesion."""
+    """Command that starts the application when the session begins."""
     executable = os.environ.get("BRAVE_WORKSPACE_MANAGER_CMD")
     if executable:
         return executable

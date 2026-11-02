@@ -1,16 +1,19 @@
-"""Controlador: coordina descubrimiento de perfiles, ventanas y acciones."""
+"""Controller: coordinates profile discovery, windows and actions."""
 
 from __future__ import annotations
 
+import contextlib
 import os
+import shutil
 import time
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QThread, QTimer, Signal
 
 from .. import discovery, processes
-from ..config import brave_user_data_dir
+from ..config import brave_user_data_dir, data_dir
 from ..database import Database
+from ..i18n import tr
 from ..models import MatchMethod, Profile, WindowInfo
 from ..tabs import FrameTabs, TabReader, emparejar
 from ..x11.base import WindowBackend
@@ -32,10 +35,11 @@ PROFILE_PALETTE = (
 
 LAUNCH_LEARNING_SECONDS = 20.0
 TAB_INTERVAL_SECONDS = 10.0
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif")
 
 
 class TabReaderThread(QThread):
-    """Lee las pestanas de Brave fuera del hilo de la interfaz."""
+    """Reads the tabs of Brave outside of the interface thread."""
 
     tabsRead = Signal(list)
 
@@ -43,7 +47,7 @@ class TabReaderThread(QThread):
         super().__init__()
         self._reader = reader
 
-    def run(self) -> None:  # pragma: no cover - depende del entorno
+    def run(self) -> None:  # pragma: no cover - depends on the environment
         try:
             frames = self._reader.read()
         except Exception:
@@ -52,7 +56,7 @@ class TabReaderThread(QThread):
 
 
 class AppController(QObject):
-    """Estado compartido de la aplicacion."""
+    """Shared state of the application."""
 
     profilesChanged = Signal()
     windowsChanged = Signal()
@@ -90,7 +94,7 @@ class AppController(QObject):
         self._sin_accesibilidad: set[int] = set()
         self._navegador_abierto = False
 
-    # ------------------------------------------------------------ ciclo de vida
+    # ------------------------------------------------------------ life cycle
 
     def start(self) -> None:
         self.refresh()
@@ -112,7 +116,7 @@ class AppController(QObject):
         if self._timer is not None:
             self._timer.setInterval(self.poll_interval_ms)
 
-    # --------------------------------------------------------------- estado
+    # ----------------------------------------------------------------- state
 
     def profile(self, profile_id: str) -> Profile | None:
         return next((p for p in self.profiles if p.id == profile_id), None)
@@ -130,22 +134,18 @@ class AppController(QObject):
 
     @property
     def tabs_status(self) -> str:
-        """Aviso sobre la lectura de pestanas; vacio si funciona."""
+        """Notice about the tab reading; empty when everything works."""
         if not self._leer_pestanas:
             return ""
         motivo = self.tab_reader.motivo
         if motivo:
-            return f"No se puede leer el número de pestañas: {motivo}"
+            return tr("tabs.unreadable", reason=motivo)
         if self._sin_accesibilidad:
-            return (
-                "Brave está en marcha sin el modo de accesibilidad, así que solo se ve "
-                "la pestaña activa de cada ventana. Cierra Brave del todo y vuelve a "
-                "abrir un perfil desde la aplicación para listar todas las pestañas."
-            )
+            return tr("tabs.no_accessibility")
         return ""
 
     def set_read_tabs(self, enabled: bool) -> None:
-        """Activa o desactiva la lectura de pestañas y el flag del lanzador."""
+        """Turns the tab reading and the browser flag on or off."""
         self._leer_pestanas = bool(enabled)
         self.launcher.leer_pestanas = self._leer_pestanas
         if not self._leer_pestanas:
@@ -159,7 +159,7 @@ class AppController(QObject):
         self.selected_profile_id = profile_id
         self.selectionChanged.emit(profile_id)
 
-    # ------------------------------------------------------------ actualizacion
+    # ------------------------------------------------------------ refreshing
 
     def refresh(self) -> None:
         found = discovery.discover_profiles(self.user_data_dir)
@@ -188,8 +188,8 @@ class AppController(QObject):
         self.resolver.resolve(context)
 
         for profile in self.profiles:
-            profile.is_open = profile.id in open_dirs
             profile.window_count = sum(1 for w in windows if w.profile_id == profile.id)
+            profile.is_open = profile.id in open_dirs or profile.window_count > 0
 
         self.windows = windows
         self._aplicar_pestanas(windows, self._frames)
@@ -197,10 +197,10 @@ class AppController(QObject):
         self.profilesChanged.emit()
         self.windowsChanged.emit()
 
-    # -------------------------------------------------------------- pestanas
+    # ----------------------------------------------------------------- tabs
 
     def _aplicar_pestanas(self, windows: list[WindowInfo], frames: list[FrameTabs]) -> None:
-        """Reparte las pestanas leidas entre las ventanas y los perfiles."""
+        """Shares the tabs read between the windows and the profiles."""
         pares = emparejar(frames, windows) if frames else {}
         for window in windows:
             frame = pares.get(window.window_id)
@@ -240,6 +240,7 @@ class AppController(QObject):
                 custom.avatar_path = item.avatar_path
                 custom.active_time = item.active_time
                 custom.custom = True
+                custom.is_virtual = False
                 merged.append(custom)
                 continue
             profile = Profile(
@@ -255,6 +256,11 @@ class AppController(QObject):
             )
             self.database.save_profile(profile)
             merged.append(profile)
+
+        for profile_id, profile in stored.items():
+            if profile.is_virtual and profile_id not in {p.id for p in merged}:
+                merged.append(profile)
+
         merged.sort(key=lambda p: (p.sort_order, p.id))
         return merged
 
@@ -295,23 +301,26 @@ class AppController(QObject):
         candidate.method = MatchMethod.LEARNED
         candidate.confidence = 1.0
 
-    # --------------------------------------------------------------- acciones
+    # --------------------------------------------------------------- actions
 
     def launch_profile(self, profile_id: str) -> bool:
         profile = self.profile(profile_id)
         if profile is None:
             return False
+        if profile.is_virtual:
+            self.statusMessage.emit(tr("status.virtual_profile"))
+            return False
         if not self.launcher.available:
-            self.statusMessage.emit("No se encuentra el ejecutable de Brave.")
+            self.statusMessage.emit(tr("status.brave_missing"))
             return False
         self._baseline_window_ids = {w.window_id for w in self.windows}
         self._launch_target = profile_id
         self._launch_deadline = time.monotonic() + LAUNCH_LEARNING_SECONDS
         if self.launcher.launch(profile.directory_name):
-            self.statusMessage.emit(f"Abriendo {profile.label}...")
+            self.statusMessage.emit(tr("status.opening", name=profile.label))
             return True
         self._launch_target = None
-        self.statusMessage.emit("No se pudo abrir Brave.")
+        self.statusMessage.emit(tr("status.launch_failed"))
         return False
 
     def activate_profile(self, profile_id: str) -> bool:
@@ -327,7 +336,7 @@ class AppController(QObject):
                     target.window_id, target.pid, profile_id, target.title, "learned"
                 )
                 self.profileActivated.emit(profile_id)
-                self.statusMessage.emit(f"{profile.label} activada.")
+                self.statusMessage.emit(tr("status.activated", name=profile.label))
                 self.refresh()
                 return True
         return self.launch_profile(profile_id)
@@ -338,10 +347,43 @@ class AppController(QObject):
             return False
         if window.is_minimized:
             ok = self.backend.restore(window.window_id)
-            self.statusMessage.emit("Ventana restaurada.")
+            self.statusMessage.emit(tr("status.window_restored"))
         else:
             ok = self.backend.minimize(window.window_id)
-            self.statusMessage.emit("Ventana minimizada.")
+            self.statusMessage.emit(tr("status.window_minimized"))
+        self.refresh()
+        return ok
+
+    def window_action(self, window_id: int, action: str) -> bool:
+        """Runs an action on a window: activate, minimize, maximize or close."""
+        window = next((w for w in self.windows if w.window_id == window_id), None)
+        if window is None:
+            return False
+        if action == "activate":
+            ok = self.backend.activate(window_id)
+            self.statusMessage.emit(
+                tr("status.window_activated") if ok else tr("status.window_activate_failed")
+            )
+        elif action == "minimize":
+            ok = self.backend.minimize(window_id)
+            self.statusMessage.emit(tr("status.window_minimized"))
+        elif action == "restore":
+            ok = self.backend.restore(window_id)
+            self.statusMessage.emit(tr("status.window_restored"))
+        elif action == "maximize":
+            if window.is_maximized:
+                ok = self.backend.unmaximize(window_id)
+                self.statusMessage.emit(tr("status.window_unmaximized"))
+            else:
+                ok = self.backend.maximize(window_id)
+                self.statusMessage.emit(tr("status.window_maximized"))
+        elif action == "close":
+            ok = self.backend.close_window(window_id)
+            self.statusMessage.emit(
+                tr("status.window_closed") if ok else tr("status.window_close_failed")
+            )
+        else:
+            return False
         self.refresh()
         return ok
 
@@ -353,30 +395,30 @@ class AppController(QObject):
         window.profile_id = profile_id
         window.method = MatchMethod.MANUAL
         window.confidence = 1.0
-        self.statusMessage.emit("Ventana asignada al perfil.")
+        self.statusMessage.emit(tr("status.assigned"))
         self.refresh()
         return True
 
     def adopt_active_window(self, profile_id: str) -> bool:
         window_id = self.backend.active_window()
         if window_id is None:
-            self.statusMessage.emit("No se pudo detectar la ventana activa.")
+            self.statusMessage.emit(tr("status.adopt_failed"))
             return False
         window = next((w for w in self.windows if w.window_id == window_id), None)
         if window is None:
-            self.statusMessage.emit("La ventana activa no pertenece a Brave.")
+            self.statusMessage.emit(tr("status.adopt_not_brave"))
             return False
-        return self.assign_window(window.window_id, profile_id)
+        return self.assign_window(window_id, profile_id)
 
     def open_profiles_manager(self) -> bool:
         if not self.launcher.available:
-            self.statusMessage.emit("No se encuentra el ejecutable de Brave.")
+            self.statusMessage.emit(tr("status.brave_missing"))
             return False
         self.launcher.open_profile_manager()
-        self.statusMessage.emit("Abriendo el gestor de perfiles de Brave.")
+        self.statusMessage.emit(tr("status.profiles_manager"))
         return True
 
-    # ------------------------------------------------------- personalizacion
+    # -------------------------------------------------------- customisation
 
     def update_profile(self, profile_id: str, **fields) -> None:
         profile = self.profile(profile_id)
@@ -405,6 +447,18 @@ class AppController(QObject):
             self.database.save_profile(profile)
         self.profilesChanged.emit()
 
+    def reorder_profiles(self, profile_ids: list[str]) -> None:
+        """Applies the order the user gave by dragging the cards."""
+        ordered = sorted(self.profiles, key=lambda p: (p.sort_order, p.id))
+        by_id = {profile.id: profile for profile in ordered}
+        nuevos = [by_id[pid] for pid in profile_ids if pid in by_id]
+        nuevos += [profile for profile in ordered if profile.id not in profile_ids]
+        for position, profile in enumerate(nuevos):
+            profile.sort_order = position
+            self.database.save_profile(profile)
+        self.profiles = nuevos
+        self.profilesChanged.emit()
+
     def reset_profile(self, profile_id: str) -> None:
         profile = self.profile(profile_id)
         if profile is None:
@@ -412,6 +466,82 @@ class AppController(QObject):
         profile.display_name = ""
         profile.is_favorite = False
         profile.icon = "circle"
+        profile.custom_image = ""
         profile.color = PROFILE_PALETTE[self.profiles.index(profile) % len(PROFILE_PALETTE)]
         self.database.save_profile(profile)
         self.profilesChanged.emit()
+
+    # -------------------------------------------------------------- images
+
+    def set_profile_image(self, profile_id: str, source: str | None) -> bool:
+        """Copies a user chosen image into the app folder and links it."""
+        profile = self.profile(profile_id)
+        if profile is None:
+            return False
+        if source is None:
+            self._borrar_imagen(profile)
+            profile.custom_image = ""
+            self.database.save_profile(profile)
+            self.profilesChanged.emit()
+            return True
+        origen = Path(source).expanduser()
+        if not origen.is_file():
+            return False
+        suffix = origen.suffix.lower()
+        if suffix not in IMAGE_EXTENSIONS:
+            return False
+        destino = self._image_path(profile_id, suffix)
+        try:
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(origen, destino)
+        except OSError:
+            return False
+        self._borrar_imagen(profile)
+        profile.custom_image = str(destino)
+        self.database.save_profile(profile)
+        self.profilesChanged.emit()
+        return True
+
+    def _borrar_imagen(self, profile: Profile) -> None:
+        anterior = profile.custom_image
+        if not anterior:
+            return
+        with contextlib.suppress(OSError):
+            Path(anterior).unlink()
+
+    def _image_path(self, profile_id: str, suffix: str) -> Path:
+        safe = "".join(char for char in profile_id if char.isalnum() or char in "-_")
+        return data_dir() / "images" / f"{safe or 'profile'}{suffix}"
+
+    # -------------------------------------------------- profiles from windows
+
+    def save_window_as_profile(self, window_id: int, name: str) -> str | None:
+        """Creates a profile of the app that owns the given window."""
+        window = next((w for w in self.windows if w.window_id == window_id), None)
+        if window is None:
+            return None
+        profile_id = self._new_virtual_id()
+        label = name.strip() or window.title.strip() or tr("profile.untitled")
+        profile = Profile(
+            id=profile_id,
+            directory_name=profile_id,
+            display_name=label,
+            brave_display_name=label,
+            color=PROFILE_PALETTE[len(self.profiles) % len(PROFILE_PALETTE)],
+            icon="circle",
+            sort_order=self.database.next_sort_order(),
+            is_virtual=True,
+            custom=True,
+        )
+        self.database.save_profile(profile)
+        self.database.assign_window(window_id, window.pid, profile_id, window.title, "manual")
+        self.statusMessage.emit(tr("status.profile_created"))
+        self.refresh()
+        return profile_id
+
+    def _new_virtual_id(self) -> str:
+        existing = {profile.id for profile in self.profiles}
+        index = 1
+        while f"virtual-{index}" in existing:
+            index += 1
+        return f"virtual-{index}"

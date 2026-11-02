@@ -1,4 +1,4 @@
-"""Backend alternativo basedo en la herramienta de linea de comandos wmctrl."""
+"""Alternative backend based on the wmctrl command line tool."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from ..models import WindowInfo
 
 
 class WmctrlBackend:
-    """Utiliza wmctrl para enumerar y activar ventanas (respaldo de python-xlib)."""
+    """Uses wmctrl to list and activate windows (fallback of python-xlib)."""
 
     name = "wmctrl"
 
@@ -40,7 +40,7 @@ class WmctrlBackend:
         active = self.active_window()
         windows: list[WindowInfo] = []
         for line in result.stdout.splitlines():
-            # Formato de "wmctrl -lp -x": id, escritorio, pid, clase, servidor, titulo
+            # "wmctrl -lp -x" format: id, desktop, pid, class, host, title
             parts = line.split(" ", 5)
             if len(parts) < 6:
                 continue
@@ -114,6 +114,36 @@ class WmctrlBackend:
                 timeout=5,
                 check=False,
             )
+        except (OSError, subprocess.SubprocessError):
+            return False
+        return result.returncode == 0
+
+    def _change_state(self, window_id: int, action: str) -> bool:
+        if not self._binary:
+            return False
+        try:
+            result = self._run(
+                "-i",
+                "-r",
+                hex(window_id),
+                "-b",
+                f"{action},maximized_vert,maximized_horz",
+            )
+        except (OSError, subprocess.SubprocessError):
+            return False
+        return result.returncode == 0
+
+    def maximize(self, window_id: int) -> bool:
+        return self._change_state(window_id, "add")
+
+    def unmaximize(self, window_id: int) -> bool:
+        return self._change_state(window_id, "remove")
+
+    def close_window(self, window_id: int) -> bool:
+        if not self._binary:
+            return False
+        try:
+            result = self._run("-i", "-c", hex(window_id))
         except (OSError, subprocess.SubprocessError):
             return False
         return result.returncode == 0

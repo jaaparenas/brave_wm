@@ -1,15 +1,14 @@
-"""Asociacion de ventanas de Brave con los perfiles nativos que las originan.
+"""Matching of Brave windows with the native profiles that own them.
 
-Chromium ejecuta todas las Ventanas de todos los perfiles de un mismo
-user-data-dir dentro de un unico proceso del navegador, de modo que el PID de
-una ventana no identifica su perfil y ninguna propiedad X11 estandar lo
-revela.  La asociacion se resuelve por tanto combining:
+Chromium runs every window of every profile of a user-data-dir inside a single
+browser process, so the PID of a window does not identify its profile and no
+standard X11 property reveals it. The match is therefore resolved by combining:
 
-* asignaciones aprendidas en ejecuciones anteriores (persistidas),
-* el perfil unico abierto cuando solo hay uno activo,
-* el nombre del perfil cuando aparece en el titulo de la ventana,
-* eliminacion: si solo queda una ventana sin asignar y un perfil abierto sin
-  ventanas, ambos se corresponden.
+* assignments learned in previous runs (persisted),
+* the only open profile when just one is active,
+* the profile name when it appears in the window title,
+* elimination: when a single unassigned window and a single open profile
+  without windows remain, they belong together.
 """
 
 from __future__ import annotations
@@ -36,7 +35,7 @@ def _matches_word(text: str, needle: str) -> bool:
 
 
 class WindowResolver:
-    """Asigna cada ventana de Brave al perfil mas probable."""
+    """Assigns every Brave window to its most likely profile."""
 
     def resolve(self, context: ResolutionContext) -> dict[int, MatchMethod]:
         windows = context.windows

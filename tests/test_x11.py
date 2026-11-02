@@ -1,4 +1,4 @@
-"""Pruebas de la decodificacion de propiedades X11."""
+"""Tests of the decoding of X11 properties."""
 
 from __future__ import annotations
 

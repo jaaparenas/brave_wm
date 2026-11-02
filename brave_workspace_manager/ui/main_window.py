@@ -1,13 +1,17 @@
-"""Ventana principal: galeria de perfiles, ventanas y administracion."""
+"""Main window: profile gallery, admin panel and header."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QObject, Qt, Signal
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QColorDialog,
+    QComboBox,
     QDialog,
+    QFileDialog,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -25,17 +29,18 @@ from ..config import APP_NAME, APP_VERSION, desktop_environment, session_type
 from ..core import autostart
 from ..core.controller import AppController
 from ..database import Database
+from ..i18n import available_languages, current_language, language_name, set_language, tr
 from ..x11.grab import ShortcutGrabber
 from . import icons
 from .admin_panel import DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, AdminPanel
-from .profile_gallery import ProfileGallery, ProfileSummary, gallery_height
-from .profile_tab import ProfileTab
+from .profile_gallery import ProfileGallery, ProfileSummary
 from .tray import TrayIcon
-from .window_panel import WindowPanel
+
+IMAGE_FILTER = "Images (*.png *.jpg *.jpeg *.webp *.bmp *.gif);;All files (*)"
 
 
 class ShortcutRelay(QObject):
-    """Puente seguro entre el hilo que captura las teclas y la interfaz."""
+    """Safe bridge between the thread that grabs the keys and the interface."""
 
     triggered = Signal(str)
 
@@ -43,44 +48,20 @@ class ShortcutRelay(QObject):
 class HelpDialog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(f"Ayuda · {APP_NAME}")
+        self.setWindowTitle(f"{tr('header.help')} · {APP_NAME}")
         self.resize(680, 520)
         layout = QVBoxLayout(self)
         browser = QTextBrowser()
         browser.setOpenExternalLinks(True)
-        browser.setHtml(
-            f"""
-            <h2>{APP_NAME} {APP_VERSION}</h2>
-            <p>Administra los perfiles nativos de Brave desde una sola ventana: consulta
-            cuales estan abiertos, cambia de perfil con un clic o con un atajo y
-            personaliza nombre, color, icono y orden.</p>
-            <h3>Como se identifica cada ventana</h3>
-            <p>Chromium ejecuta todas las ventanas de todos los perfiles de un mismo
-            directorio de datos dentro de un unico proceso, y no publica ninguna
-            propiedad X11 que indique el perfil de origen. Por eso la aplicacion
-            <b>aprende</b> la relacion: recuerda las ventanas que abriste, deduce el
-            perfil cuando solo hay uno activo y permite asignar a mano las restantes.</p>
-            <h3>Atajos</h3>
-            <ul>
-              <li><b>Ctrl+Alt+1…9</b>: activar el perfil de la posicion indicada.</li>
-              <li><b>Ctrl+Alt+Tab</b> / <b>Ctrl+Alt+Shift+Tab</b>: perfil siguiente o anterior.</li>
-              <li><b>Ctrl+Alt+B</b>: mostrar u ocultar el panel de administracion.</li>
-            </ul>
-            <h3>Privacidad</h3>
-            <p>La aplicacion no lee cookies, contrasenas ni historial de Brave, no
-            modifica <i>Local State</i> ni las bases de datos internas de los perfiles,
-            no intercepta trafico y no comparte directorios entre perfiles. Solo lee
-            el nombre visible de los perfiles y lista los procesos y las ventanas.</p>
-            """
-        )
+        browser.setHtml(tr("help.body", app=APP_NAME, version=APP_VERSION))
         layout.addWidget(browser)
-        close = QPushButton("Cerrar")
+        close = QPushButton(tr("dialog.close"))
         close.clicked.connect(self.accept)
         layout.addWidget(close, 0, Qt.AlignRight)
 
 
 class MainWindow(QMainWindow):
-    """Interfaz principal de la aplicacion."""
+    """Main interface of the application."""
 
     def __init__(
         self,
@@ -92,10 +73,11 @@ class MainWindow(QMainWindow):
         self.controller = controller
         self.database = database
         self.grabber = grabber
-        self._tabs: dict[str, ProfileTab] = {}
+        self._tabs: dict[str, object] = {}
         self._activate_on_click = True
         self._tray: TrayIcon | None = None
         self._tray_enabled = False
+        self._local_shortcuts: list[QShortcut] = []
 
         self.setWindowTitle(APP_NAME)
         self.setWindowIcon(icons.app_pixmap())
@@ -111,7 +93,7 @@ class MainWindow(QMainWindow):
         self._install_local_shortcuts()
         self._rebuild_profiles()
 
-    # ------------------------------------------------------------- construccion
+    # ------------------------------------------------------------- building
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -119,18 +101,15 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(14, 12, 14, 8)
         root.setSpacing(12)
 
-        self._splitter = QSplitter(Qt.Horizontal)
-        self._window_panel = WindowPanel()
-        self._window_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._admin_panel = AdminPanel()
-        self._admin_panel.setVisible(False)
-        self._splitter.addWidget(self._window_panel)
-        self._splitter.addWidget(self._admin_panel)
-        self._splitter.setStretchFactor(0, 3)
-        self._splitter.setStretchFactor(1, 2)
-
         root.addLayout(self._build_header())
-        root.addWidget(self._build_gallery_area(), 0)
+
+        self._splitter = QSplitter(Qt.Horizontal)
+        self._splitter.setChildrenCollapsible(False)
+        self._splitter.addWidget(self._build_side_panel())
+        self._splitter.addWidget(self._build_gallery_area())
+        self._splitter.setStretchFactor(0, 0)
+        self._splitter.setStretchFactor(1, 1)
+        self._splitter.setSizes([470, 760])
         root.addWidget(self._splitter, 1)
 
         self.setCentralWidget(central)
@@ -139,8 +118,6 @@ class MainWindow(QMainWindow):
         self._status_left = QLabel()
         self.statusBar().addWidget(self._status_left, 1)
         self.statusBar().addPermanentWidget(self._status_label)
-
-        self._update_gallery_height()
 
     def _build_header(self) -> QHBoxLayout:
         header = QHBoxLayout()
@@ -151,46 +128,61 @@ class MainWindow(QMainWindow):
         title = QLabel(APP_NAME)
         title.setObjectName("HeaderTitle")
         titles.addWidget(title)
-        self._subtitle = QLabel("Descubriendo perfiles...")
+        self._subtitle = QLabel()
         self._subtitle.setObjectName("HeaderSubtitle")
         titles.addWidget(self._subtitle)
         header.addLayout(titles)
         header.addStretch(1)
 
-        self._refresh_button = QPushButton("Actualizar")
+        self._language_combo = QComboBox()
+        self._language_combo.setToolTip(tr("header.language"))
+        for code in available_languages():
+            self._language_combo.addItem(language_name(code), code)
+        index = self._language_combo.findData(current_language())
+        self._language_combo.setCurrentIndex(max(0, index))
+        self._language_combo.currentIndexChanged.connect(self._on_language_changed)
+        header.addWidget(self._language_combo)
+
+        self._refresh_button = QPushButton()
         self._refresh_button.clicked.connect(self.controller.refresh)
         header.addWidget(self._refresh_button)
 
-        self._admin_button = QPushButton("Administrador")
-        self._admin_button.setCheckable(True)
-        self._admin_button.setToolTip("Ctrl+Alt+B")
-        self._admin_button.toggled.connect(self._admin_panel.setVisible)
-        header.addWidget(self._admin_button)
-
-        self._tray_button = QPushButton("Bandeja")
-        self._tray_button.setCheckable(True)
-        self._tray_button.toggled.connect(self._set_tray_enabled)
-        header.addWidget(self._tray_button)
-
-        help_button = QPushButton("Ayuda")
-        help_button.clicked.connect(self._show_help)
-        header.addWidget(help_button)
+        self._help_button = QPushButton()
+        self._help_button.clicked.connect(self._show_help)
+        header.addWidget(self._help_button)
         return header
 
-    def _build_gallery_area(self) -> QWidget:
-        """Zona superior: resumen fijo a la izquierda y galeria centrada."""
-        area = QWidget()
-        row = QHBoxLayout(area)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(14)
+    def _build_side_panel(self) -> QWidget:
+        """Left column: summary on top and the admin table below, always visible."""
+        panel = QWidget()
+        panel.setMinimumWidth(420)
+        panel.setMaximumWidth(560)
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
 
         self._summary = ProfileSummary()
-        row.addWidget(self._summary, 0, Qt.AlignLeft | Qt.AlignTop)
+        layout.addWidget(self._summary)
+
+        self._admin_panel = AdminPanel()
+        layout.addWidget(self._admin_panel, 1)
+        return panel
+
+    def _build_gallery_area(self) -> QWidget:
+        """Right column: the gallery of profiles."""
+        area = QWidget()
+        layout = QVBoxLayout(area)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         self._gallery = ProfileGallery()
         self._gallery.activated.connect(self._on_profile_clicked)
         self._gallery.doubleClicked.connect(self.controller.launch_profile)
         self._gallery.contextRequested.connect(self._show_profile_menu)
+        self._gallery.windowActionRequested.connect(self._on_window_action)
+        self._gallery.reordered.connect(self._on_profiles_reordered)
+        self._gallery.saveProfileRequested.connect(self._on_save_window_as_profile)
+        self._gallery.assignRequested.connect(self.controller.assign_window)
+        self._gallery.unassignedActionRequested.connect(self._on_unassigned_action)
 
         self._gallery_scroll = QScrollArea()
         self._gallery_scroll.setWidgetResizable(True)
@@ -198,20 +190,14 @@ class MainWindow(QMainWindow):
         self._gallery_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._gallery_scroll.setWidget(self._gallery)
         self._gallery_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        row.addWidget(self._gallery_scroll, 1)
+        layout.addWidget(self._gallery_scroll)
         return area
 
-    def _update_gallery_height(self) -> None:
-        """Reserva a la galeria filas completas sin ahogar el panel inferior."""
-        height = gallery_height(int(self.height() * 0.5))
-        if self._gallery_scroll.height() != height:
-            self._gallery_scroll.setFixedHeight(height)
-
-    # ------------------------------------------------------------- senales
+    # -------------------------------------------------------------- signals
 
     def _connect_controller(self) -> None:
         self.controller.profilesChanged.connect(self._rebuild_profiles)
-        self.controller.windowsChanged.connect(self._refresh_windows)
+        self.controller.windowsChanged.connect(self._refresh_state)
         self.controller.statusMessage.connect(self._show_status)
         self.controller.selectionChanged.connect(self._on_selection_changed)
 
@@ -232,12 +218,8 @@ class MainWindow(QMainWindow):
         panel.shortcutChanged.connect(self._on_shortcut_changed)
         panel.shortcutResetRequested.connect(self._reset_shortcuts)
         panel.selectionChanged.connect(self.controller.select)
-
-        self._window_panel.windowActivated.connect(self._on_window_activated)
-        self._window_panel.windowToggled.connect(self.controller.toggle_window)
-        self._window_panel.windowAssigned.connect(self.controller.assign_window)
-        self._window_panel.adoptRequested.connect(self.controller.adopt_active_window)
-        self._window_panel.openProfileRequested.connect(self.controller.launch_profile)
+        panel.imageRequested.connect(self._on_image_requested)
+        panel.imageCleared.connect(self._on_image_cleared)
 
     def _load_settings(self) -> None:
         settings = {
@@ -252,10 +234,17 @@ class MainWindow(QMainWindow):
         self._admin_panel.set_settings(settings)
         self.controller.set_poll_interval(int(settings["poll_interval"]))
         self.controller.set_read_tabs(settings["read_tabs"] == "1")
-        self._tray_button.setChecked(settings["tray_enabled"] == "1")
         self._admin_panel.set_shortcuts(self._shortcut_bindings())
+        self._set_tray_enabled(settings["tray_enabled"] == "1")
+        language = current_language()
+        index = self._language_combo.findData(language)
+        if index >= 0:
+            self._language_combo.blockSignals(True)
+            self._language_combo.setCurrentIndex(index)
+            self._language_combo.blockSignals(False)
         if settings["hotkeys_enabled"] == "1":
             self._apply_shortcuts()
+        self.apply_language()
 
     def _shortcut_bindings(self) -> dict[str, str]:
         bindings = dict(DEFAULT_SHORTCUTS)
@@ -266,77 +255,122 @@ class MainWindow(QMainWindow):
         return bindings
 
     def _install_local_shortcuts(self) -> None:
-        """Atajos que funcionan cuando la ventana tiene el foco."""
+        """Shortcuts that work when the window has the focus."""
+        for shortcut in self._local_shortcuts:
+            shortcut.setEnabled(False)
+            shortcut.deleteLater()
+        self._local_shortcuts = []
         for action, sequence in self._shortcut_bindings().items():
             shortcut = QShortcut(QKeySequence(sequence), self)
             shortcut.activated.connect(lambda a=action: self._on_shortcut(a))
+            self._local_shortcuts.append(shortcut)
 
     def start(self) -> None:
-        """Arranca las capturas globales de teclado, que necesitan el grabber."""
+        """Starts the global keyboard grabs, which need the grabber."""
         self._install_local_shortcuts()
         if self.database.get_setting("hotkeys_enabled", "1") == "1":
             self._apply_shortcuts()
 
-    # ------------------------------------------------------------- renderizado
+    # ------------------------------------------------------------ rendering
 
     def _rebuild_profiles(self) -> None:
         self._gallery.set_profiles(self.controller.profiles)
         self._tabs = self._gallery.tiles
-        self._subtitle.setText("Perfiles nativos de Brave · acceso de solo lectura")
-        self._admin_panel.set_profiles(self.controller.profiles)
         if self._tray is not None:
             self._tray.set_profiles(self.controller.profiles)
-        self._refresh_windows()
+        self._refresh_state()
 
-    def _refresh_windows(self) -> None:
+    def _refresh_state(self) -> None:
+        """Pushes the current state of the app into every widget."""
         selected = self.controller.selected_profile_id
         profile = self.controller.profile(selected) if selected else None
         if profile is None and self.controller.profiles:
             profile = self.controller.profiles[0]
             self.controller.select(profile.id)
-        self._window_panel.set_profile(profile)
-        self._window_panel.set_windows(
-            self.controller.windows_for(profile.id if profile else None), self.controller.profiles
+
+        for perfil in self.controller.profiles:
+            tile = self._gallery.tiles.get(perfil.id)
+            if tile is not None:
+                tile.update_profile(perfil)
+        self._gallery.set_windows(
+            {
+                perfil.id: self.controller.windows_for(perfil.id)
+                for perfil in self.controller.profiles
+            }
         )
-        self._window_panel.set_unassigned(
-            self.controller.unassigned_windows(), self.controller.profiles
-        )
-        self._window_panel.set_tabs_status(self.controller.tabs_status)
-        self._status_label.setText(
-            f"Backend: {self.controller.backend.name} · Sesion: {session_type()} "
-            f"· Escritorio: {desktop_environment() or 'desconocido'}"
-        )
-        for profile_id, tab in self._tabs.items():
-            current = self.controller.profile(profile_id)
-            if current is not None:
-                tab.update_profile(current)
+        self._gallery.set_unassigned(self.controller.unassigned_windows(), self.controller.profiles)
         self._gallery.set_selected(self.controller.selected_profile_id)
+        self._admin_panel.set_profiles(self.controller.profiles)
         self._summary.update_summary(
             self.controller.profiles,
             self.controller.windows,
             profile.label if profile else "",
         )
+        self._status_label.setText(
+            tr(
+                "status.backend",
+                backend=self.controller.backend.name,
+                session=session_type(),
+                desktop=desktop_environment() or tr("status.desktop_unknown"),
+            )
+        )
 
     def _on_selection_changed(self, profile_id: str) -> None:
         self._admin_panel.select_profile(profile_id)
-        self._refresh_windows()
+        self._refresh_state()
 
-    # ------------------------------------------------------------- acciones
+    # -------------------------------------------------------------- actions
 
     def _on_profile_clicked(self, profile_id: str) -> None:
         self.controller.select(profile_id)
         if self._activate_on_click:
             self.controller.activate_profile(profile_id)
 
-    def _on_window_activated(self, window_id: int) -> None:
-        if self.controller.backend.activate(window_id):
-            self._show_status("Ventana activada.")
-            self.controller.refresh()
-        else:
-            self._show_status("No se pudo activar la ventana.")
+    def _on_window_action(self, _profile_id: str, window_id: int, action: str) -> None:
+        self.controller.window_action(window_id, action)
+
+    def _on_unassigned_action(self, window_id: int, action: str) -> None:
+        self.controller.window_action(window_id, action)
+
+    def _on_profiles_reordered(self, profile_ids: list) -> None:
+        self.controller.reorder_profiles(list(profile_ids))
+        self._show_status(tr("status.reordered"))
+
+    def _on_save_window_as_profile(self, window_id: int, title: str) -> None:
+        """Creates a profile of the app for a window that had none."""
+        name, accepted = QInputDialog.getText(
+            self,
+            tr("unassigned.profile_title"),
+            tr("unassigned.profile_label"),
+            text=title,
+        )
+        if not accepted:
+            return
+        profile_id = self.controller.save_window_as_profile(window_id, name)
+        if profile_id:
+            self.controller.select(profile_id)
 
     def _on_color_requested(self, profile_id: str, color: str) -> None:
         self.controller.update_profile(profile_id, color=color)
+
+    def _on_image_requested(self, profile_id: str) -> None:
+        """Asks for an image file and links it to the profile."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            tr("admin.pick_image"),
+            str(Path.home()),
+            IMAGE_FILTER,
+        )
+        if not path:
+            return
+        if not self.controller.set_profile_image(profile_id, path):
+            self._show_status(tr("status.image_missing"))
+            return
+        self._show_status(tr("status.image_saved"))
+
+    def _on_image_cleared(self, profile_id: str) -> None:
+        self.controller.set_profile_image(profile_id, None)
+        self._show_status(tr("status.image_saved"))
 
     def _on_setting_changed(self, key: str, value: str) -> None:
         self.database.set_setting(key, value)
@@ -350,7 +384,7 @@ class MainWindow(QMainWindow):
             elif self.grabber is not None:
                 self.grabber.stop()
         elif key == "tray_enabled":
-            self._tray_button.setChecked(value == "1")
+            self._set_tray_enabled(value == "1")
         elif key == "autostart":
             if value == "1":
                 autostart.enable(autostart.python_command())
@@ -379,9 +413,13 @@ class MainWindow(QMainWindow):
             detail = ", ".join(
                 f"{action}: {reason}" for action, reason in failures.items() if action != "_last"
             )
-            self._show_status(f"Atajo en conflicto: {detail}" if detail else "Atajo en conflicto.")
+            self._show_status(
+                tr("status.shortcut_conflict", detail=detail)
+                if detail
+                else tr("status.shortcut_conflict_generic")
+            )
         else:
-            self._show_status("Atajos globales registrados.")
+            self._show_status(tr("status.shortcuts_ok"))
 
     def _on_shortcut(self, action: str) -> None:
         profiles = self.controller.profiles
@@ -397,8 +435,6 @@ class MainWindow(QMainWindow):
             self._cycle_profile(1)
         elif action == "prev-profile":
             self._cycle_profile(-1)
-        elif action == "toggle-admin":
-            self._admin_button.setChecked(not self._admin_button.isChecked())
 
     def _cycle_profile(self, delta: int) -> None:
         profiles = self.controller.profiles
@@ -417,41 +453,47 @@ class MainWindow(QMainWindow):
         if profile is None:
             return
         menu = QMenu(self)
-        activate = menu.addAction("Activar")
+        activate = menu.addAction(tr("menu.activate"))
         activate.triggered.connect(lambda: self.controller.activate_profile(profile_id))
-        open_action = menu.addAction("Abrir perfil")
-        open_action.triggered.connect(lambda: self.controller.launch_profile(profile_id))
-        adopt = menu.addAction("Tomar la ventana activa")
+        if not profile.is_virtual:
+            open_action = menu.addAction(tr("menu.open"))
+            open_action.triggered.connect(lambda: self.controller.launch_profile(profile_id))
+        adopt = menu.addAction(tr("menu.adopt"))
         adopt.triggered.connect(lambda: self.controller.adopt_active_window(profile_id))
 
         menu.addSeparator()
-        rename = menu.addAction("Renombrar...")
+        rename = menu.addAction(tr("menu.rename"))
         rename.triggered.connect(lambda: self._rename_dialog(profile_id))
-        color = menu.addAction("Cambiar color...")
+        color = menu.addAction(tr("menu.color"))
         color.triggered.connect(lambda: self._color_dialog(profile_id))
 
-        icon_menu = menu.addMenu("Icono")
+        icon_menu = menu.addMenu(tr("menu.icon"))
         for name in icons.GLYPH_NAMES:
-            action = icon_menu.addAction(icons.glyph_pixmap(name, "#e7eaf0", 16), name)
+            action = icon_menu.addAction(
+                icons.glyph_pixmap(name, "#e7eaf0", 16), tr(f"icon.{name}")
+            )
             action.triggered.connect(
                 lambda _checked=False, value=name: self.controller.update_profile(
                     profile_id, icon=value
                 )
             )
 
+        image = menu.addAction(tr("menu.image"))
+        image.triggered.connect(lambda: self._on_image_requested(profile_id))
+
         favorite = menu.addAction(
-            "Marcar como favorito" if not profile.is_favorite else "Quitar de favoritos"
+            tr("menu.favorite_remove") if profile.is_favorite else tr("menu.favorite_add")
         )
         favorite.triggered.connect(
             lambda: self.controller.update_profile(profile_id, is_favorite=not profile.is_favorite)
         )
 
         menu.addSeparator()
-        up = menu.addAction("Subir")
+        up = menu.addAction(tr("menu.up"))
         up.triggered.connect(lambda: self.controller.move_profile(profile_id, -1))
-        down = menu.addAction("Bajar")
+        down = menu.addAction(tr("menu.down"))
         down.triggered.connect(lambda: self.controller.move_profile(profile_id, 1))
-        reset = menu.addAction("Restablecer")
+        reset = menu.addAction(tr("menu.reset"))
         reset.triggered.connect(lambda: self.controller.reset_profile(profile_id))
         menu.exec(position)
 
@@ -461,22 +503,46 @@ class MainWindow(QMainWindow):
             return
         name, accepted = QInputDialog.getText(
             self,
-            "Renombrar perfil",
-            "Nombre visible:",
+            tr("dialog.rename.title"),
+            tr("dialog.rename.label"),
             text=profile.display_name or profile.brave_display_name,
         )
         if accepted:
             self.controller.rename_profile(profile_id, name)
 
     def _color_dialog(self, profile_id: str) -> None:
-        from PySide6.QtGui import QColor
-
         profile = self.controller.profile(profile_id)
         if profile is None:
             return
-        chosen = QColorDialog.getColor(QColor(profile.color), self, "Color del perfil")
+        chosen = QColorDialog.getColor(QColor(profile.color), self, tr("dialog.color.title"))
         if chosen.isValid():
             self.controller.update_profile(profile_id, color=chosen.name())
+
+    # --------------------------------------------------------------- language
+
+    def _on_language_changed(self, _index: int) -> None:
+        code = self._language_combo.currentData()
+        if not code:
+            return
+        set_language(code)
+        self.database.set_setting("language", code)
+        self.apply_language()
+
+    def apply_language(self) -> None:
+        """Rebuilds every text of the interface in the active language."""
+        self._refresh_button.setText(tr("header.refresh"))
+        self._help_button.setText(tr("header.help"))
+        self._language_combo.setToolTip(tr("header.language"))
+        self._subtitle.setText(tr("app.subtitle"))
+        for child in self.findChildren(QWidget):
+            retranslate = getattr(child, "retranslate", None)
+            if callable(retranslate):
+                retranslate()
+        if self._tray is not None:
+            self._tray.retranslate()
+        self.controller.refresh()
+
+    # ------------------------------------------------------------------ tray
 
     def _set_tray_enabled(self, enabled: bool) -> None:
         self._tray_enabled = enabled
@@ -515,7 +581,7 @@ class MainWindow(QMainWindow):
             self.grabber.stop()
         QApplication.instance().quit()
 
-    def closeEvent(self, event) -> None:  # noqa: N802 (API de Qt)
+    def closeEvent(self, event) -> None:  # noqa: N802 (Qt API)
         if self._tray_enabled and self._tray is not None and self._tray.isVisible():
             self.hide()
             event.ignore()
@@ -524,7 +590,3 @@ class MainWindow(QMainWindow):
         if self.grabber is not None:
             self.grabber.stop()
         event.accept()
-
-    def resizeEvent(self, event) -> None:  # noqa: N802 (API de Qt)
-        super().resizeEvent(event)
-        self._update_gallery_height()

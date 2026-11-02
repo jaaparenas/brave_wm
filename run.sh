@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Arranca Brave Workspace Manager desde el repositorio.
+# Starts Brave Workspace Manager from the repository.
 set -euo pipefail
 
-RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV="$RAIZ/.venv"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV="$ROOT/.venv"
 
 if [ ! -x "$VENV/bin/python" ]; then
-    echo "No existe el entorno virtual. Ejecuta primero ./setup.sh" >&2
+    echo "The virtual environment does not exist. Run ./setup.sh first" >&2
     exit 1
 fi
 
-cd "$RAIZ"
+cd "$ROOT"
 exec "$VENV/bin/python" -m brave_workspace_manager "$@"

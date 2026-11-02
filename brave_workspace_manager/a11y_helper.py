@@ -1,18 +1,18 @@
-"""Lee las pestanas abiertas de las ventanas de Brave mediante AT-SPI.
+"""Reads the open tabs of the Brave windows through AT-SPI.
 
-Script autonomo: no importa el paquete, para poder ejecutarse con cualquier
-interprete que tenga PyGObject disponible. Imprime un JSON con una entrada por
-ventana de Brave:
+Standalone script: it does not import the package, so it can run with any
+interpreter that has PyGObject available. It prints a JSON document with one
+entry per Brave window:
 
     {"ok": true, "frames": [{"title": "...", "tabs": ["..."], "active": 0,
                               "geometry": [x, y, w, h]}]}
 
-Si la libreria de accesibilidad no esta disponible responde
+When the accessibility library is not available it answers
 ``{"ok": false, "reason": "..."}``.
 
-Chromium solo publica el arbol de la interfaz (barra de pestanas incluida)
-cuando el navegador se ha abierto con el modo de accesibilidad activado; si no,
-las ventanas aparecen sin hijos y la lista de pestanas sale vacia.
+Chromium only publishes its interface tree (tab strip included) when the
+browser was started with accessibility mode enabled; otherwise the windows
+have no children and the tab list comes out empty.
 """
 
 from __future__ import annotations
@@ -80,10 +80,10 @@ def _esta_seleccionada(nodo, atspi) -> bool:
 
 
 def _listas_de_pestanas(nodo, atspi, profundidad: int = 0) -> list:
-    """Localiza las franjas de pestanas (``page tab list``) dentro de un frame.
+    """Finds the tab strips (``page tab list``) inside a frame.
 
-    Chromium deja dos franjas: la real, que esta mostrando, y una vacia y
-    oculta. Se ignoran los subarboles de contenido web (la pagina cargada).
+    Chromium keeps two strips: the real one, which is shown, and an empty
+    hidden one. Web content subtrees (the loaded page) are ignored.
     """
     if profundidad > PROFUNDIDAD_MAXIMA:
         return []
@@ -100,7 +100,7 @@ def _listas_de_pestanas(nodo, atspi, profundidad: int = 0) -> list:
 
 
 def _pestanas_de_la_lista(lista, atspi, profundidad: int = 0) -> list[tuple[str, bool]]:
-    """Titulo y estado de seleccion de cada pestana de una franja."""
+    """Title and selection state of every tab of a strip."""
     pestanas: list[tuple[str, bool]] = []
     for hijo in _hijos(lista):
         if _rol(hijo) == "page tab":
@@ -113,7 +113,7 @@ def _pestanas_de_la_lista(lista, atspi, profundidad: int = 0) -> list[tuple[str,
 
 
 def _mejor_franja(frame, atspi) -> list[tuple[str, bool]]:
-    """La franja visible con mas pestanas; la lista de pestanas de la ventana."""
+    """The visible strip with most tabs: the tab list of the window."""
     candidatas = []
     for lista in _listas_de_pestanas(frame, atspi):
         pestanas = _pestanas_de_la_lista(lista, atspi)
@@ -171,7 +171,7 @@ def main() -> int:
     try:
         frames = _frames_de_brave(atspi)
     except Exception as exc:
-        print(json.dumps({"ok": False, "reason": f"error-leyendo: {exc}"}))
+        print(json.dumps({"ok": False, "reason": f"error-reading: {exc}"}))
         return 0
     print(json.dumps({"ok": True, "frames": frames}, ensure_ascii=False))
     return 0

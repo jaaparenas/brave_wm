@@ -1,4 +1,4 @@
-"""Pruebas de la capa de persistencia SQLite."""
+"""Tests of the SQLite persistence layer."""
 
 from __future__ import annotations
 
@@ -85,3 +85,34 @@ def test_next_sort_order(tmp_path: Path) -> None:
     assert database.next_sort_order() == 0
     database.save_profile(Profile(id="Default", directory_name="Default", sort_order=0))
     assert database.next_sort_order() == 1
+
+
+def test_image_and_virtual_flag_round_trip(tmp_path: Path) -> None:
+    database = Database(tmp_path / "workspace.db")
+    database.save_profile(
+        Profile(
+            id="virtual-1",
+            directory_name="virtual-1",
+            custom_image="/tmp/me.png",
+            is_virtual=True,
+        )
+    )
+    stored = database.load_profiles()["virtual-1"]
+    assert stored.custom_image == "/tmp/me.png"
+    assert stored.is_virtual is True
+
+
+def test_old_databases_get_the_new_columns(tmp_path: Path) -> None:
+    import sqlite3
+
+    path = tmp_path / "workspace.db"
+    Database(path).close()
+    connection = sqlite3.connect(path)
+    connection.execute("ALTER TABLE profiles DROP COLUMN custom_image")
+    connection.execute("ALTER TABLE profiles DROP COLUMN is_virtual")
+    connection.commit()
+    connection.close()
+
+    database = Database(path)
+    database.save_profile(Profile(id="Default", directory_name="Default", custom_image="x.png"))
+    assert database.load_profiles()["Default"].custom_image == "x.png"

@@ -1,13 +1,13 @@
-"""Lectura de las pestanas de cada ventana de Brave y emparejamiento con el perfil.
+"""Reading of the tabs of every Brave window and matching with the windows.
 
-Chromium no expone las pestanas por X11/EWMH: solo el titulo de la ventana
-(la pestana activa). La via local es el arbol de accesibilidad (AT-SPI), que se
-lee en un proceso aparte porque el entorno virtual de la aplicacion puede no
-tener PyGObject.
+Chromium does not expose its tabs through X11/EWMH: only the window title (the
+active tab). The local way is the accessibility tree (AT-SPI), which is read in
+a separate process because the virtual environment of the application may not
+have PyGObject.
 
-El navegador solo publica su interfaz (y con ella la barra de pestanas) si se
-ha abierto con el modo de accesibilidad activado; por eso el lanzador anade
-``--force-renderer-accessibility`` a los perfiles que abre.
+The browser only publishes its interface (and with it the tab strip) when it
+was started with accessibility mode enabled; that is why the launcher adds
+``--force-renderer-accessibility`` to the profiles it opens.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ UMBRAL_SOLAPE = 0.4
 
 @dataclass(slots=True)
 class FrameTabs:
-    """Pestanas de una ventana de Brave segun el arbol de accesibilidad."""
+    """Tabs of a Brave window according to the accessibility tree."""
 
     title: str = ""
     titles: list[str] = field(default_factory=list)
@@ -41,14 +41,14 @@ class FrameTabs:
 
     @property
     def active_title(self) -> str:
-        """Titulo de la pestana en primer plano, si se conoce."""
+        """Title of the foreground tab, when known."""
         if 0 <= self.active < len(self.titles):
             return self.titles[self.active]
         return ""
 
 
 class SinLecturaTabs:
-    """Sustituto del lector: no consulta nada (capturas y pruebas)."""
+    """Stand-in reader that queries nothing (screenshots and tests)."""
 
     motivo = ""
     disponible = False
@@ -62,7 +62,7 @@ def normalizar(titulo: str) -> str:
 
 
 def solape(primero: tuple[int, int, int, int], segundo: tuple[int, int, int, int]) -> float:
-    """Proporcion de interseccion entre dos rectangulos."""
+    """Overlap ratio between two rectangles."""
     ax, ay, aw, ah = primero
     bx, by, bw, bh = segundo
     ancho = max(0, min(ax + aw, bx + bw) - max(ax, bx))
@@ -75,7 +75,7 @@ def solape(primero: tuple[int, int, int, int], segundo: tuple[int, int, int, int
 
 
 class TabReader:
-    """Ejecuta el ayudante de accesibilidad y devuelve las pestanas leidas."""
+    """Runs the accessibility helper and returns the tabs it read."""
 
     def __init__(
         self,
@@ -93,9 +93,9 @@ class TabReader:
         return self._helper.exists()
 
     def read(self) -> list[FrameTabs]:
-        """Pestanas de todas las ventanas de Brave; lista vacia si no se puede leer."""
+        """Tabs of every Brave window; an empty list when they cannot be read."""
         if not self.disponible:
-            self.motivo = "Falta el ayudante de accesibilidad."
+            self.motivo = "The accessibility helper is missing."
             return []
         if self._interprete is None:
             return self._buscar_interprete()
@@ -179,7 +179,7 @@ class TabReader:
 
 
 def emparejar(frames: list[FrameTabs], windows: list[WindowInfo]) -> dict[int, FrameTabs]:
-    """Relaciona cada ventana de X11 con sus pestanas, si se puede determinar."""
+    """Links every X11 window with its tabs, when it can be determined."""
     resultado: dict[int, FrameTabs] = {}
     emparejados = {id(frame) for frame in resultado.values()}
     disponibles = list(windows)
@@ -221,7 +221,7 @@ def emparejar(frames: list[FrameTabs], windows: list[WindowInfo]) -> dict[int, F
 
 
 def _coinciden(frame: FrameTabs, ventana: WindowInfo) -> bool:
-    """Sin geometria no hay contradiccion; con ella debe haber solape."""
+    """Without geometry there is no contradiction; with it they must overlap."""
     if frame.geometry is None or ventana.width <= 0 or ventana.height <= 0:
         return True
     rect = (ventana.x, ventana.y, ventana.width, ventana.height)

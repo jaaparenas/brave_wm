@@ -7,9 +7,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  pruebas:
-    name: Pruebas en Python ${{ matrix.python-version }}
+  tests:
+    name: Tests on Python ${{ matrix.python-version }}
     runs-on: ubuntu-22.04
+    env:
+      QT_QPA_PLATFORM: offscreen
     strategy:
       fail-fast: false
       matrix:
@@ -18,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Instalar dependencias del sistema
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libgl1 libegl1 libxkbcommon-x11-0
@@ -28,22 +30,22 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Instalar dependencias
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-cov
 
-      - name: Ejecutar las pruebas
+      - name: Run the tests
         run: pytest -q --cov=brave_workspace_manager --cov-report=term-missing
 
-      - name: Comprobar que el paquete se puede construir
+      - name: Check that the package builds
         run: |
           pip install build
           python -m build
 
-  revision:
-    name: Revision de estilo
+  lint:
+    name: Lint
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -52,12 +54,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Instalar herramientas
+      - name: Install tools
         run: |
           python -m pip install --upgrade pip
           pip install ruff
 
-      - name: Comprobar formato y lint
+      - name: Check format and lint
         run: |
           ruff check brave_workspace_manager tests
           ruff format --check brave_workspace_manager tests

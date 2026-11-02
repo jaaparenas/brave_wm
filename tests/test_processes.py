@@ -1,4 +1,4 @@
-"""Pruebas de la inspeccion de procesos de Brave."""
+"""Tests of the inspection of Brave processes."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def test_reads_flag_from_normal_arguments() -> None:
 
 
 def test_reads_flag_from_rewritten_process_title() -> None:
-    """Chromium reescribe el titulo de sus procesos secundarios en un solo argumento."""
+    """Chromium rewrites the title of its child processes into a single argument."""
     cmdline = [
         "/opt/brave.com/brave/brave --type=renderer --lang=en-GB "
         "--enable-sandbox --renderer-client-id=42"
@@ -76,7 +76,7 @@ def test_child_processes_do_not_count() -> None:
 
 
 def test_accesibilidad_por_pid() -> None:
-    """Cada proceso del navegador se comprueba por separado."""
+    """Every browser process is checked on its own."""
     con_flag = processes.BrowserProcess(
         pid=10, kind="browser", cmdline=["brave-browser", "--force-renderer-accessibility"]
     )

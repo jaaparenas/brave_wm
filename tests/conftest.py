@@ -1,4 +1,4 @@
-"""Fixtures compartidas por la bateria de pruebas."""
+"""Fixtures shared by the test suite."""
 
 from __future__ import annotations
 
@@ -10,12 +10,21 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from brave_workspace_manager import i18n
 from brave_workspace_manager.models import Profile, WindowInfo
+
+
+@pytest.fixture(autouse=True)
+def english_interface():
+    """Tests always run with the English catalogue, whatever the system locale."""
+    i18n.set_language("en")
+    yield
+    i18n.set_language("en")
 
 
 @pytest.fixture
 def fake_brave_root(tmp_path: Path) -> Path:
-    """Directorio de datos de Brave simulado con dos perfiles."""
+    """Fake Brave data directory with two profiles."""
     root = tmp_path / "Brave-Browser"
     root.mkdir()
     local_state = {

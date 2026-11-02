@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "brave-workspace-manager"
-version = "1.0.0"
-description = "Administrador de perfiles nativos de Brave para Linux Mint / Cinnamon"
+version = "1.1.0"
+description = "Native Brave profile manager for Linux Mint / Cinnamon"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
@@ -16,6 +16,7 @@ classifiers = [
     "Environment :: X11 Applications :: Qt",
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
     "Natural Language :: Spanish",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
@@ -47,6 +48,9 @@ Issues = "https://github.com/jaaparenas/brave-workspace-manager/issues"
 [tool.setuptools.packages.find]
 include = ["brave_workspace_manager*"]
 
+[tool.setuptools.package-data]
+brave_workspace_manager = ["locales/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -62,9 +66,9 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
 ignore = [
-    "E501", # el formateador se encarga del límite de longitud
-    "N815", # las señales de Qt siguen la convención camelCase
-    "SIM108", # los ternarios anidados son más legibles aquí
+    "E501", # the formatter takes care of the line length
+    "N815", # Qt signals follow the camelCase convention
+    "SIM108", # nested ternaries are more readable here
 ]
 
 [tool.ruff.lint.per-file-ignores]

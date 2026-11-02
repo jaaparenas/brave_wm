@@ -1,4 +1,4 @@
-"""Descubrimiento no destructivo de los perfiles nativos de Brave."""
+"""Non-destructive discovery of the native Brave profiles."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ class DiscoveredProfile:
 
 
 def read_local_state(user_data_dir: Path) -> dict:
-    """Lee Local State de forma tolerante a fallos; nunca escribe en el perfil."""
+    """Reads Local State tolerating errors; it never writes to the profile."""
     path = Path(user_data_dir) / "Local State"
     try:
         with path.open("r", encoding="utf-8") as handle:
@@ -39,7 +39,7 @@ def profile_sort_key(name: str) -> tuple:
 
 
 def profile_directories(user_data_dir: Path) -> list[str]:
-    """Carpetas de perfil reales: las que contienen un archivo Preferences."""
+    """Real profile folders: those that contain a Preferences file."""
     names: list[str] = []
     try:
         entries = sorted(Path(user_data_dir).iterdir())
@@ -76,7 +76,7 @@ def _avatar_path(user_data_dir: Path, raw: object) -> str | None:
 
 
 def discover_profiles(user_data_dir: Path) -> list[DiscoveredProfile]:
-    """Perfiles existentes con su nombre visible tal y como Brave los presenta."""
+    """Existing profiles with their visible name, as Brave shows them."""
     user_data_dir = Path(user_data_dir)
     state = read_local_state(user_data_dir)
     profile_state = state.get("profile")

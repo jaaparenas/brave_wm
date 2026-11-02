@@ -1,1 +1,1 @@
-"""Interfaz de escritorio (PySide6)."""
+"""Desktop interface (PySide6)."""

@@ -1,4 +1,4 @@
-"""Punto de entrada: python -m brave_workspace_manager"""
+"""Entry point: python -m brave_workspace_manager"""
 
 from __future__ import annotations
 

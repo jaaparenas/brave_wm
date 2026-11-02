@@ -7,16 +7,16 @@ dist/
 .venv/
 venv/
 
-# Pruebas
+# Tests
 .pytest_cache/
 .coverage
 htmlcov/
 
-# Herramientas
+# Tools
 .idea/
 .vscode/
 *.swp
 
-# Sistema
+# System
 .DS_Store
 Thumbs.db

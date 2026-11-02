@@ -1,4 +1,4 @@
-"""Persistencia SQLite: perfiles, asignaciones de ventanas y ajustes."""
+"""SQLite persistence: profiles, window assignments and settings."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def utc_timestamp() -> str:
 
 
 class Database:
-    """Acceso thread-safe a la base local de la aplicacion."""
+    """Thread-safe access to the local database of the application."""
 
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
@@ -62,8 +62,21 @@ class Database:
     def migrate(self) -> None:
         with self._lock, self._conn:
             self._conn.executescript(_SCHEMA)
+            self._add_missing_columns()
 
-    # ------------------------------------------------------------------ perfiles
+    def _add_missing_columns(self) -> None:
+        """Adds the columns introduced after the first release."""
+        columns = {
+            row["name"] for row in self._conn.execute("PRAGMA table_info(profiles)").fetchall()
+        }
+        for name, definition in (
+            ("custom_image", "TEXT NOT NULL DEFAULT ''"),
+            ("is_virtual", "INTEGER NOT NULL DEFAULT 0"),
+        ):
+            if name not in columns:
+                self._conn.execute(f"ALTER TABLE profiles ADD COLUMN {name} {definition}")
+
+    # ------------------------------------------------------------------ profiles
 
     def load_profiles(self) -> dict[str, Profile]:
         with self._lock:
@@ -78,6 +91,8 @@ class Database:
                 icon=row["icon"],
                 sort_order=row["sort_order"],
                 is_favorite=bool(row["is_favorite"]),
+                custom_image=row["custom_image"] or "",
+                is_virtual=bool(row["is_virtual"]),
                 custom=True,
             )
         return profiles
@@ -88,14 +103,17 @@ class Database:
             self._conn.execute(
                 """
                 INSERT INTO profiles (id, directory_name, display_name, color, icon,
-                                      sort_order, is_favorite, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                      sort_order, is_favorite, custom_image, is_virtual,
+                                      created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     display_name = excluded.display_name,
                     color = excluded.color,
                     icon = excluded.icon,
                     sort_order = excluded.sort_order,
                     is_favorite = excluded.is_favorite,
+                    custom_image = excluded.custom_image,
+                    is_virtual = excluded.is_virtual,
                     updated_at = excluded.updated_at
                 """,
                 (
@@ -106,6 +124,8 @@ class Database:
                     profile.icon,
                     profile.sort_order,
                     int(profile.is_favorite),
+                    profile.custom_image,
+                    int(profile.is_virtual),
                     stamp,
                     stamp,
                 ),
