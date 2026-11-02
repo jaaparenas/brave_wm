@@ -8,7 +8,7 @@ A manager for **native Brave profiles** on Linux Mint / Cinnamon.
 
 It organises the profiles you already have in Brave (the ones listed in
 `brave://settings/manageProfile`) from a single window: a gallery of profile
-cards with window controls, global shortcuts, an optional system tray icon and
+cards with window controls, global shortcuts, a system tray menu and
 per-profile customisation (display name, colour, icon, image and favourite
 mark) — **without ever modifying Brave's internal data**.
 
@@ -91,7 +91,12 @@ locally, kept in memory only, and never stored or sent anywhere.
 - **Customises** each profile with a display name, colour, icon, custom image
   and favourite mark.
 - **Global shortcuts** (`Ctrl+Alt+1`…`9`, `Ctrl+Alt+Tab`,
-  `Ctrl+Alt+Shift+Tab`) and an optional system tray icon.
+  `Ctrl+Alt+Shift+Tab`).
+- **System tray icon**, always present: a click (left or right) opens a menu
+  with the open profiles first (avatar, tab count, the active one marked) and
+  the closed ones under **Other profiles**; choosing one brings it to the
+  front or opens it. A double click opens the window maximised. Closing the
+  window hides it to the tray; **Quit** in the menu ends the app.
 - **Bilingual interface** (English and Spanish) with a live language selector.
 - **Installable** as a desktop application (`packaging/*.desktop`), a systemd
   user service, and with an autostart entry.
@@ -152,7 +157,7 @@ The main window has a header and two columns:
   - **Administration panel**: the table of detected profiles, profile
     customisation (name, colour, icon, image, favourite, order, open, reset,
     and a button for Brave's own profile manager), settings (refresh
-    interval, activate on click, global shortcuts, system tray icon, start
+    interval, activate on click, global shortcuts, start
     with the system, list open tabs) and the shortcut editor.
 - **Right column**: the **profile gallery**. A click selects (and, by
   default, activates) a profile, a double click opens it, and the context menu
@@ -322,7 +327,7 @@ requirements in [docs/SPECIFICATION.md](docs/SPECIFICATION.md).
 ## Development and tests
 
 ```bash
-QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q   # 136 tests, no browser needed
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q   # 144 tests, no browser needed
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest --cov=brave_workspace_manager
 ruff check
 ruff format --check

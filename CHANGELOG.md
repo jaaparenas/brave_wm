@@ -20,6 +20,10 @@ and the project uses [semantic versioning](https://semver.org/).
 - Tab counts for Brave started outside the app: the app briefly turns on the
   `ScreenReaderEnabled` property of the AT-SPI bus so Brave builds its
   accessibility tree without a restart, then restores the property.
+- The system tray icon is always present. Its menu switches between
+  profiles: open ones first with avatar and tab count (the active one marked),
+  closed ones under **Other profiles**. A double click opens the window
+  maximised, and closing the window hides it to the tray.
 - **Move to profile** and **Not from this profile** in a card's **…** menu, to
   correct the profile of a window.
 - Custom image per profile, from the administration panel (**Choose image…**
@@ -42,7 +46,7 @@ and the project uses [semantic versioning](https://semver.org/).
 - Automatic database migration that adds the `custom_image` and `is_virtual`
   columns to the `profiles` table.
 - Tests for the translation layer, including a check that every catalogue has
-  the same keys. 136 tests in total.
+  the same keys. 144 tests in total.
 
 ### Changed
 
@@ -73,8 +77,8 @@ and the project uses [semantic versioning](https://semver.org/).
 - The window-title matching rule.
 - The **Administrator** toggle button and its `Ctrl+Alt+B` shortcut (the
   administration panel is always visible now).
-- The **Tray** button in the header. The system tray icon remains available as
-  a setting in the administration panel.
+- The **Tray** button in the header and the tray setting: the tray icon is
+  always present now.
 - The bottom panel with the windows of the selected profile
   (`ui/window_panel.py`); its actions now live on the cards.
 - The old screenshots `docs/images/ventana-principal.png` and

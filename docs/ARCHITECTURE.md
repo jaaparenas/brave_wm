@@ -218,7 +218,7 @@ SQLite in `~/.local/share/brave-workspace-manager/workspace.db`:
 |---|---|
 | `profiles` | `id`, `directory_name`, `display_name`, `color`, `icon`, `sort_order`, `is_favorite`, `custom_image`, `is_virtual`, timestamps. |
 | `window_assignments` | `window_id`, `browser_pid`, `profile_id`, `title`, `method`, timestamp. Composite primary key `(window_id, browser_pid)`. |
-| `settings` | Application preferences as key/value pairs (refresh interval, activate on click, shortcuts, tray, autostart, tab reading, `language`). |
+| `settings` | Application preferences as key/value pairs (refresh interval, activate on click, shortcuts, autostart, tab reading, `language`). |
 
 Access is thread-safe (`RLock` + `check_same_thread=False`) because the
 keyboard grab thread also reads settings.
@@ -310,7 +310,14 @@ one per language, mapping keys to texts with `str.format` placeholders.
 - `ui/admin_panel.py` contains the profiles table, the customisation form
   (name, colour, icon, image, favourite, order, open, reset), the settings
   and the shortcut table.
-- `ui/tray.py` provides the optional tray icon with quick access to profiles.
+- `ui/tray.py` provides the tray icon, always present when the desktop has a
+  tray. Its menu lists the open profiles (avatar, tab count, active one
+  checked) and the closed ones in a submenu; it is rebuilt only when what it
+  shows changes, and never while it is open. Cinnamon hosts tray icons through
+  StatusNotifierItem, where Qt only receives single clicks, so a double click
+  is detected as two clicks within `QApplication.doubleClickInterval()`; it
+  opens the window maximised. A single click shows the menu after that
+  interval. Closing the main window hides it to the tray.
 
 ## 12. Degraded mode and expected failures
 

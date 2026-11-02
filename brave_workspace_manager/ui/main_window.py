@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSplitter,
+    QSystemTrayIcon,
     QTextBrowser,
     QVBoxLayout,
     QWidget,
@@ -76,7 +77,7 @@ class MainWindow(QMainWindow):
         self._tabs: dict[str, object] = {}
         self._activate_on_click = True
         self._tray: TrayIcon | None = None
-        self._tray_enabled = False
+        self._quitting = False
         self._local_shortcuts: list[QShortcut] = []
 
         self.setWindowTitle(APP_NAME)
@@ -227,7 +228,6 @@ class MainWindow(QMainWindow):
             "poll_interval": self.database.get_setting("poll_interval", "2000"),
             "activate_on_click": self.database.get_setting("activate_on_click", "1"),
             "hotkeys_enabled": self.database.get_setting("hotkeys_enabled", "1"),
-            "tray_enabled": self.database.get_setting("tray_enabled", "0"),
             "autostart": self.database.get_setting("autostart", "0"),
             "read_tabs": self.database.get_setting("read_tabs", "1"),
         }
@@ -236,7 +236,7 @@ class MainWindow(QMainWindow):
         self.controller.set_poll_interval(int(settings["poll_interval"]))
         self.controller.set_read_tabs(settings["read_tabs"] == "1")
         self._admin_panel.set_shortcuts(self._shortcut_bindings())
-        self._set_tray_enabled(settings["tray_enabled"] == "1")
+        self._install_tray()
         language = current_language()
         index = self._language_combo.findData(language)
         if index >= 0:
@@ -277,8 +277,6 @@ class MainWindow(QMainWindow):
     def _rebuild_profiles(self) -> None:
         self._gallery.set_profiles(self.controller.profiles)
         self._tabs = self._gallery.tiles
-        if self._tray is not None:
-            self._tray.set_profiles(self.controller.profiles)
         self._refresh_state()
 
     def _refresh_state(self) -> None:
@@ -315,6 +313,7 @@ class MainWindow(QMainWindow):
                 desktop=desktop_environment() or tr("status.desktop_unknown"),
             )
         )
+        self._update_tray()
 
     def _on_selection_changed(self, profile_id: str) -> None:
         self._admin_panel.select_profile(profile_id)
@@ -390,8 +389,6 @@ class MainWindow(QMainWindow):
                 self._apply_shortcuts()
             elif self.grabber is not None:
                 self.grabber.stop()
-        elif key == "tray_enabled":
-            self._set_tray_enabled(value == "1")
         elif key == "autostart":
             if value == "1":
                 autostart.enable(autostart.python_command())
@@ -551,30 +548,47 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ tray
 
-    def _set_tray_enabled(self, enabled: bool) -> None:
-        self._tray_enabled = enabled
-        self.database.set_setting("tray_enabled", "1" if enabled else "0")
-        if enabled:
-            if self._tray is None:
-                self._tray = TrayIcon(self)
-                self._tray.activateProfileRequested.connect(self._on_profile_clicked)
-                self._tray.nextProfileRequested.connect(lambda: self._cycle_profile(1))
-                self._tray.prevProfileRequested.connect(lambda: self._cycle_profile(-1))
-                self._tray.refreshRequested.connect(self.controller.refresh)
-                self._tray.toggleWindowRequested.connect(self._toggle_visible)
-                self._tray.quitRequested.connect(self._quit)
-                self._tray.set_profiles(self.controller.profiles)
-            self._tray.show()
-        elif self._tray is not None:
-            self._tray.hide()
+    def _install_tray(self) -> None:
+        """The tray icon is always present when the desktop has a tray."""
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        self._tray = TrayIcon(self)
+        self._tray.activateProfileRequested.connect(self._on_tray_profile)
+        self._tray.showWindowRequested.connect(self._show_window)
+        self._tray.showMaximizedRequested.connect(self._show_maximized)
+        self._tray.quitRequested.connect(self._quit)
+        self._update_tray()
+        self._tray.show()
 
-    def _toggle_visible(self) -> None:
-        if self.isVisible() and not self.isMinimized():
-            self.hide()
-        else:
+    @property
+    def has_tray(self) -> bool:
+        return self._tray is not None
+
+    def _update_tray(self) -> None:
+        if self._tray is None:
+            return
+        active = next((w.profile_id for w in self.controller.windows if w.is_active), None)
+        self._tray.set_profiles(
+            self.controller.profiles, active or self.controller.selected_profile_id
+        )
+
+    def _on_tray_profile(self, profile_id: str) -> None:
+        """Brings the profile to the front, or opens it when it is closed."""
+        self.controller.select(profile_id)
+        self.controller.activate_profile(profile_id)
+
+    def _show_window(self) -> None:
+        if self.isMinimized():
             self.showNormal()
-            self.raise_()
-            self.activateWindow()
+        else:
+            self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _show_maximized(self) -> None:
+        self.showMaximized()
+        self.raise_()
+        self.activateWindow()
 
     def _show_help(self) -> None:
         HelpDialog(self).exec()
@@ -583,15 +597,21 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(message, 6000)
 
     def _quit(self) -> None:
+        self._quitting = True
         self.controller.stop()
         if self.grabber is not None:
             self.grabber.stop()
         QApplication.instance().quit()
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt API)
-        if self._tray_enabled and self._tray is not None and self._tray.isVisible():
+        if self._tray is not None and self._tray.isVisible() and not self._quitting:
             self.hide()
             event.ignore()
+            if self.database.get_setting("tray_hint_shown") != "1":
+                self.database.set_setting("tray_hint_shown", "1")
+                self._tray.showMessage(
+                    "Brave Workspace Manager", tr("tray.still_running"), self._tray.icon(), 6000
+                )
             return
         self.controller.stop()
         if self.grabber is not None:

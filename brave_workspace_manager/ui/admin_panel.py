@@ -229,12 +229,6 @@ class AdminPanel(QWidget):
         )
         form.addRow("", self._hotkeys_check)
 
-        self._tray_check = QCheckBox()
-        self._tray_check.toggled.connect(
-            lambda state: self.settingChanged.emit("tray_enabled", "1" if state else "0")
-        )
-        form.addRow("", self._tray_check)
-
         self._autostart_check = QCheckBox()
         self._autostart_check.toggled.connect(
             lambda state: self.settingChanged.emit("autostart", "1" if state else "0")
@@ -327,7 +321,6 @@ class AdminPanel(QWidget):
         self._poll_spin.setValue(int(settings.get("poll_interval", 2000)))
         self._activate_check.setChecked(settings.get("activate_on_click", "1") == "1")
         self._hotkeys_check.setChecked(settings.get("hotkeys_enabled", "1") == "1")
-        self._tray_check.setChecked(settings.get("tray_enabled", "0") == "1")
         self._autostart_check.setChecked(settings.get("autostart", "0") == "1")
         self._tabs_check.setChecked(settings.get("read_tabs", "1") == "1")
         self._loading = False
@@ -385,7 +378,6 @@ class AdminPanel(QWidget):
         self._poll_spin.setSuffix(" ms")
         self._activate_check.setText(tr("admin.settings.activate_on_click"))
         self._hotkeys_check.setText(tr("admin.settings.hotkeys"))
-        self._tray_check.setText(tr("admin.settings.tray"))
         self._autostart_check.setText(tr("admin.settings.autostart"))
         self._tabs_check.setText(tr("admin.settings.read_tabs"))
         self._tabs_check.setToolTip(tr("admin.settings.read_tabs_tip"))

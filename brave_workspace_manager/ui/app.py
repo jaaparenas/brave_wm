@@ -118,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
 
     controller.start()
 
-    if args.minimized:
+    if args.minimized and window.has_tray:
         window.hide()
     else:
         window.show()
