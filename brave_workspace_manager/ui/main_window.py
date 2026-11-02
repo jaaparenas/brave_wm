@@ -1,4 +1,4 @@
-"""Ventana principal: barra de perfiles, ventanas y administracion."""
+"""Ventana principal: galeria de perfiles, ventanas y administracion."""
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ from ..database import Database
 from ..x11.grab import ShortcutGrabber
 from . import icons
 from .admin_panel import DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, AdminPanel
+from .profile_gallery import ProfileGallery, ProfileSummary, gallery_height
 from .profile_tab import ProfileTab
 from .tray import TrayIcon
 from .window_panel import WindowPanel
@@ -129,7 +130,7 @@ class MainWindow(QMainWindow):
         self._splitter.setStretchFactor(1, 2)
 
         root.addLayout(self._build_header())
-        root.addWidget(self._build_profile_bar(), 0)
+        root.addWidget(self._build_gallery_area(), 0)
         root.addWidget(self._splitter, 1)
 
         self.setCentralWidget(central)
@@ -138,6 +139,8 @@ class MainWindow(QMainWindow):
         self._status_left = QLabel()
         self.statusBar().addWidget(self._status_left, 1)
         self.statusBar().addPermanentWidget(self._status_label)
+
+        self._update_gallery_height()
 
     def _build_header(self) -> QHBoxLayout:
         header = QHBoxLayout()
@@ -174,19 +177,35 @@ class MainWindow(QMainWindow):
         header.addWidget(help_button)
         return header
 
-    def _build_profile_bar(self) -> QScrollArea:
-        self._profile_container = QWidget()
-        self._profile_layout = QHBoxLayout(self._profile_container)
-        self._profile_layout.setContentsMargins(0, 0, 0, 0)
-        self._profile_layout.setSpacing(10)
+    def _build_gallery_area(self) -> QWidget:
+        """Zona superior: resumen fijo a la izquierda y galeria centrada."""
+        area = QWidget()
+        row = QHBoxLayout(area)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(14)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setWidget(self._profile_container)
-        scroll.setFixedHeight(ProfileTab.HEIGHT + 16)
-        return scroll
+        self._summary = ProfileSummary()
+        row.addWidget(self._summary, 0, Qt.AlignLeft | Qt.AlignTop)
+
+        self._gallery = ProfileGallery()
+        self._gallery.activated.connect(self._on_profile_clicked)
+        self._gallery.doubleClicked.connect(self.controller.launch_profile)
+        self._gallery.contextRequested.connect(self._show_profile_menu)
+
+        self._gallery_scroll = QScrollArea()
+        self._gallery_scroll.setWidgetResizable(True)
+        self._gallery_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._gallery_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._gallery_scroll.setWidget(self._gallery)
+        self._gallery_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        row.addWidget(self._gallery_scroll, 1)
+        return area
+
+    def _update_gallery_height(self) -> None:
+        """Reserva a la galeria filas completas sin ahogar el panel inferior."""
+        height = gallery_height(int(self.height() * 0.5))
+        if self._gallery_scroll.height() != height:
+            self._gallery_scroll.setFixedHeight(height)
 
     # ------------------------------------------------------------- senales
 
@@ -259,28 +278,9 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------- renderizado
 
     def _rebuild_profiles(self) -> None:
-        while self._profile_layout.count():
-            item = self._profile_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-        self._tabs.clear()
-
-        for profile in self.controller.profiles:
-            tab = ProfileTab(profile)
-            tab.activated.connect(self._on_profile_clicked)
-            tab.doubleClicked.connect(self.controller.launch_profile)
-            tab.contextRequested.connect(self._show_profile_menu)
-            self._profile_layout.addWidget(tab)
-            self._tabs[profile.id] = tab
-        self._profile_layout.addStretch(1)
-
-        open_count = sum(1 for p in self.controller.profiles if p.is_open)
-        window_count = len(self.controller.windows)
-        self._subtitle.setText(
-            f"{len(self.controller.profiles)} perfiles · {open_count} abiertos · "
-            f"{window_count} ventanas de Brave detectadas"
-        )
+        self._gallery.set_profiles(self.controller.profiles)
+        self._tabs = self._gallery.tiles
+        self._subtitle.setText("Perfiles nativos de Brave · acceso de solo lectura")
         self._admin_panel.set_profiles(self.controller.profiles)
         if self._tray is not None:
             self._tray.set_profiles(self.controller.profiles)
@@ -307,6 +307,12 @@ class MainWindow(QMainWindow):
             current = self.controller.profile(profile_id)
             if current is not None:
                 tab.update_profile(current)
+        self._gallery.set_selected(self.controller.selected_profile_id)
+        self._summary.update_summary(
+            self.controller.profiles,
+            self.controller.windows,
+            profile.label if profile else "",
+        )
 
     def _on_selection_changed(self, profile_id: str) -> None:
         self._admin_panel.select_profile(profile_id)
@@ -513,3 +519,7 @@ class MainWindow(QMainWindow):
         if self.grabber is not None:
             self.grabber.stop()
         event.accept()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (API de Qt)
+        super().resizeEvent(event)
+        self._update_gallery_height()

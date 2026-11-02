@@ -39,6 +39,20 @@ QLabel#HeaderTitle {{
 QLabel#HeaderSubtitle, QLabel#Muted {{
     color: {TEXT_MUTED};
 }}
+QLabel#SummaryTitle {{
+    font-size: 14px;
+    font-weight: 600;
+}}
+QLabel#SummaryLabel {{
+    color: {TEXT_MUTED};
+}}
+QLabel#SummaryValue {{
+    font-weight: 600;
+}}
+QLabel#SummaryActive {{
+    color: {ACCENT};
+    font-weight: 600;
+}}
 QLabel#StatusOk {{ color: {SUCCESS}; }}
 QLabel#StatusOff {{ color: {TEXT_MUTED}; }}
 QLabel#StatusWarn {{ color: {WARNING}; }}

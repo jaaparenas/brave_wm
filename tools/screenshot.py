@@ -36,6 +36,10 @@ PERFILES = {
     "Profile 1": "Personal",
     "Profile 2": "Pruebas",
     "Profile 3": "Investigación",
+    "Profile 4": "Diseño",
+    "Profile 5": "Finanzas",
+    "Profile 6": "Lectura",
+    "Profile 7": "Programación",
 }
 
 VENTANAS = [

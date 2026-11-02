@@ -10,6 +10,7 @@ perfiles funciona como funciona.
                      ┌──────────────────────────────┐
                      │          interfaz             │
                      │  ui/main_window.py           │
+                     │  ui/profile_gallery.py       │
                      │  ui/profile_tab.py           │
                      │  ui/window_panel.py          │
                      │  ui/admin_panel.py           │
@@ -162,9 +163,14 @@ el hilo de capturas de teclado tambien consulta ajustes.
 - `ui/icons.py` dibuja los iconos de forma procedural (16 glifos) y genera el
   avatar de cada perfil a partir de su icono de Brave o de sus iniciales, de
   modo que el repositorio no necesita recursos binarios.
-- `ui/main_window.py` monta la ventana principal: cabecera, barra de perfiles
-  (`QScrollArea`), divisor entre el panel de ventanas y el de administracion,
-  y la barra de estado con el backend activo.
+- `ui/main_window.py` monta la ventana principal: cabecera, zona de galeria,
+  divisor entre el panel de ventanas y el de administracion, y la barra de
+  estado con el backend activo.
+- `ui/profile_gallery.py` calcula la rejilla de perfiles: reparte las fichas en
+  columnas segun el ancho disponible, las centra y mantiene el resumen a la
+  izquierda siempre visible.
+- `ui/profile_tab.py` dibuja la ficha de un perfil (avatar, nombre, estado y
+  marca de favorito) dentro de la galeria.
 - `ui/admin_panel.py` contiene la tabla de perfiles, el formulario de
   personalizacion, la tabla de atajos y los ajustes.
 - `ui/tray.py` ofrece el icono de bandeja con acceso rapido a los perfiles.

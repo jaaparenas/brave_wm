@@ -7,7 +7,7 @@
 Administrador de **perfiles nativos de Brave** para Linux Mint / Cinnamon.
 
 Orquesta los perfiles que ya tienes en Brave (los que aparecen en
-`brave://settings/manageProfile`) desde una unica ventana: barra de perfiles,
+`brave://settings/manageProfile`) desde una unica ventana: galeria de perfiles,
 panel de ventanas, atajos globales, bandeja del sistema y personalizacion
 (nombre visible, color, icono y favorito) **sin modificar jamas los datos
 internos de Brave**.
@@ -36,8 +36,9 @@ internos de Brave**.
 
 - **Descubre** los perfiles nativos de Brave leyendo `Local State` y las carpetas
   del directorio de datos. Solo lectura: nunca escribe en ellos.
-- **Muestra una barra de perfiles** con el estado de cada uno (abierto o
-  cerrado), su avatar y su color.
+- **Muestra una galeria de perfiles** que se reorganiza sola segun el tamano de
+  la ventana, con el estado de cada uno (abierto o cerrado), su avatar y su
+  color, y un resumen fijo a la izquierda con los contadores.
 - **Activa un perfil** con un clic: trae al frente su ventana si la conoce, o
   la abre en su directorio nativo (`--profile-directory=Default`) si no.
 - **Gestiona las ventanas** de Brave: activar, minimizar, restaurar y asignar
@@ -96,8 +97,12 @@ brave-workspace-manager --version
 
 La ventana principal tiene cuatro zonas:
 
-1. **Barra de perfiles**: un clic selecciona el perfil, doble clic lo abre y el
-   menu contextual da acceso a las acciones rapidas.
+1. **Galeria de perfiles**: las fichas se reacomodan solas al cambiar el ancho
+   de la ventana y el conjunto queda centrado. Un clic selecciona el perfil,
+   doble clic lo abre y el menu contextual da acceso a las acciones rapidas.
+   A la izquierda, el **resumen** permanece siempre visible con el numero de
+   perfiles, los abiertos, los favoritos, las ventanas de Brave detectadas y el
+   perfil activo.
 2. **Panel de ventanas**: las ventanas de Brave asociadas al perfil
    seleccionado, con acciones de activar, minimizar y restaurar.
 3. **Ventanas sin asignar**: las ventanas que Chromium no permite identificar
@@ -189,7 +194,7 @@ brave_workspace_manager/
 │   ├── wmctrl_backend.py  alternativa mediante la CLI de wmctrl
 │   ├── grab.py          capturas de teclado para atajos globales
 │   └── base.py          interfaz comun de backends
-└── ui/                  interfaz PySide6 (barra, paneles, bandeja, tema)
+└── ui/                  interfaz PySide6 (galeria, paneles, bandeja, tema)
 ```
 
 Mas detalle en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) y la especificacion

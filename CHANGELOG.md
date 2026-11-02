@@ -29,9 +29,21 @@ proyecto usa [versionado semantico](https://semver.org/lang/es/).
   `wmctrl` y modo degradado sin soporte de ventanas.
 - Modo de linea de comandos: `--version`, `--minimized` y `--user-data-dir`.
 - Instancia unica mediante `QLockFile`.
-- 52 pruebas automaticas que no acceden a los datos reales del navegador.
+- 62 pruebas automaticas que no acceden a los datos reales del navegador.
 - Publicacion en GitHub con licencia MIT, empaquetado `pyproject.toml`,
   instaladores, servicio de systemd de usuario e integracion continua.
+
+### Cambiado
+
+- La barra horizontal de perfiles se sustituye por una **galeria**: las fichas
+  se reparten en columnas que dependen del ancho de la ventana, el conjunto
+  queda centrado y el perfil activo se resalta con un borde de acento.
+- El resumen de los perfiles pasa a ser un panel fijo a la izquierda que
+  permanece siempre visible con el total de perfiles, los abiertos, los
+  cerrados, los favoritos, las ventanas de Brave detectadas, las ventanas sin
+  asignar y el perfil activo.
+- Cada ficha muestra el avatar, el nombre, el estado y la marca de favorito en
+  vertical, con el color del perfil en la parte superior.
 
 ### Seguridad
 
@@ -52,3 +64,5 @@ proyecto usa [versionado semantico](https://semver.org/lang/es/).
   Brave: se filtra por PID propio y por clase `brave-browser`.
 - Si la aplicacion termina de forma abrupta, el fichero de instancia se
   recupera solo cuando el proceso que lo creo ya no existe.
+- Las fichas de la galeria ya no se quedan ocultas cuando la lista de
+  perfiles se actualiza con la ventana ya visible.
